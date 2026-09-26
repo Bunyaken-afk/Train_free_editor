@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>電車内表示器エディタ v4.14 (オンライン共有大容量対応版)</title>
+  <title>電車内表示器エディタ v4.15 (超安定・大容量分割保存版)</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -310,7 +310,7 @@
         <button id="tab-deformed-btn" class="active" onclick="switchCaptureTab('deformed')" style="flex:1; padding:8px;">📐 簡略路線図 (デフォルメ)</button>
         <button id="tab-real-btn" onclick="switchCaptureTab('real')" style="flex:1; padding:8px;">🗺️ 実地図そのまま</button>
       </div>
-      <div class="zoom-toolbar" style="display:flex; gap:6px; align-items:center; margin-bottom:8px; background:#1e1e1e; padding:4px 8px; border-radius:4px;">
+      <div style="display:flex; gap:6px; align-items:center; margin-bottom:8px; background:#1e1e1e; padding:4px 8px; border-radius:4px;">
         <span style="font-size:12px; color:#aaa;">ズーム:</span>
         <button onclick="zoomPreview(0.2)" style="width:auto; padding:4px 10px;">🔍 (+)</button>
         <button onclick="zoomPreview(-0.2)" style="width:auto; padding:4px 10px;">🔍 (-)</button>
@@ -331,13 +331,13 @@
   </div>
 
   <script>
-    // --- オンライン共有・大容量チャンク分割保存マネージャー ---
+    // --- 超安定・大容量チャンク分割保存マネージャー (v4.15) ---
     localforage.config({
-      name: 'TrainEditorApp_Chunks_Share',
-      storeName: 'works_chunked_share'
+      name: 'TrainEditorApp_Chunks_Share_v3',
+      storeName: 'works_chunked_share_v3'
     });
 
-    const CHUNK_SIZE = 300 * 1024; // 1つのパーツあたり約300KBに安全分割
+    const CHUNK_SIZE = 100 * 1024; // 1パーツあたり100KBに安全軽量化し、大容量エラーを完全防止
 
     async function dbGetAllWorks() {
       try {
@@ -383,7 +383,6 @@
         let jsonStr = JSON.stringify(workData);
         let compressed = LZString.compressToUTF16(jsonStr);
 
-        // 古い関連チャンクを綺麗に掃除
         await dbDeleteWork(workId);
 
         let totalLen = compressed.length;
