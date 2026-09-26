@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>電車内表示器エディタ v4.27 (循環参照エラー完全修復版)</title>
+  <title>電車内表示器エディタ v4.28 (試運転・走行シミュレーション追加版)</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -34,6 +34,7 @@
     .header-btn.optimize { background: #e67e22; border-color: #d35400; font-weight: bold; color: #fff; }
     .header-btn.online-share { background: #20c997; color: #000; font-weight: bold; }
     .header-btn.online-browse { background: #ffc107; color: #000; font-weight: bold; }
+    .header-btn.test-run { background: #00ffcc; color: #000; font-weight: bold; }
 
     .key-guide-box {
       background: #1e1e1e; border: 1px solid #00aaff; border-radius: 4px; padding: 4px 10px; font-size: 11px; color: #00ffcc; display: flex; align-items: center; gap: 6px; white-space: nowrap;
@@ -61,6 +62,10 @@
       width: 14px; height: 14px; border-radius: 50%; background: #007acc; border: 2px solid #fff; box-shadow: 0 0 4px rgba(0,0,0,0.5); cursor: pointer;
     }
     .station-marker.limited { background: #ff6600; border-color: #ffff00; box-shadow: 0 0 6px #ff6600; }
+
+    .train-marker {
+      width: 16px; height: 16px; border-radius: 50%; background: #ffcc00; border: 2px solid #fff; box-shadow: 0 0 8px #ffcc00; z-index: 1500;
+    }
 
     .timetable-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 5px; }
     .timetable-table th, .timetable-table td { border: 1px solid #444; padding: 4px; text-align: center; }
@@ -137,6 +142,7 @@
 
     <button id="track-btn" class="header-btn" onclick="toggleTracking()">🎥 追尾 OFF</button>
     <button id="audio-btn" class="header-btn" onclick="toggleAudio()">🔊 アナウンス OFF</button>
+    <button id="test-run-btn" class="header-btn test-run" onclick="toggleTestRun()">▶ 試運転開始</button>
     <button class="header-btn capture" onclick="openCaptureModal()">📸 路線図出力</button>
 
     <div style="margin-left: auto; display: flex; gap: 6px;">
@@ -339,11 +345,11 @@
   </div>
 
   <script>
-    // --- 循環参照完全修復版エディタ (v4.27) ---
+    // --- 試運転・走行シミュレーション機能搭載エディタ (v4.28) ---
 
     localforage.config({
-      name: 'TrainEditorApp_RiasCoast_v13',
-      storeName: 'works_rias_coast_v13',
+      name: 'TrainEditorApp_RiasCoast_v14',
+      storeName: 'works_rias_coast_v14',
       size: 50 * 1024 * 1024
     });
 
@@ -457,6 +463,8 @@
     let currentCaptureMode = 'deformed';
     let currentZoomScale = 1.0, panX = 0, panY = 0, isPanning = false, startPanX = 0, startPanY = 0;
 
+    let testRunState = { isRunning: false, timer: null, currentStep: 0, routePoints: [] };
+
     const lineColors = ['#007acc', '#e6194B', '#3cb44b', '#ffe119', '#911eb4', '#f58231'];
 
     function updateKeyGuide(mode) {
@@ -490,6 +498,105 @@
       btn.classList.toggle('toggle-on', isAudioOn);
     }
 
+    // --- 試運転・シミュレーション機能 ---
+    function toggleTestRun() {
+      if (testRunState.isRunning) {
+        stopTestRun();
+      } else {
+        startTestRun();
+      }
+    }
+
+    function startTestRun() {
+      let t = getActiveTrain();
+      if (!t || !t.timetable || t.timetable.length < 2) {
+        alert('先に対象列車のダイヤ（時刻表）を生成してください！');
+        return;
+      }
+
+      // 経由ルートの座標配列を生成
+      let routeStations = [t.startStation, ...t.viaStations, t.endStation];
+      if (t.expressName !== '各駅停車') {
+        let expType = expressTypes.find(e => e.name === t.expressName);
+        if (expType && expressStops[expType.id]) {
+          let allowedStops = expressStops[expType.id];
+          routeStations = routeStations.filter((st, idx) => {
+            if (idx === 0 || idx === routeStations.length - 1) return true;
+            return !!allowedStops[st.id];
+          });
+        }
+      }
+
+      testRunState.routePoints = routeStations.map(s => s.latlng);
+      testRunState.currentStep = 0;
+      testRunState.isRunning = true;
+
+      const btn = document.getElementById('test-run-btn');
+      btn.innerText = '⏹ 試運転停止';
+      btn.style.background = '#d9534f';
+      btn.style.color = '#fff';
+
+      // マーカー作成または初期化
+      if (!t.marker) {
+        t.marker = L.marker(testRunState.routePoints[0], {
+          icon: L.divIcon({
+            className: 'custom-train-icon',
+            html: `<div class="train-marker" title="${t.name}"></div>`,
+            iconSize: [16, 16], iconAnchor: [8, 8]
+          })
+        }).addTo(map);
+      } else {
+        t.marker.setLatLng(testRunState.routePoints[0]);
+        t.marker.addTo(map);
+      }
+
+      // アニメーションループ開始 (約0.1秒ごとにスムーズに移動)
+      let totalSteps = 100; // 駅間の補間ステップ数
+      let currentSegment = 0;
+      let subStep = 0;
+
+      testRunState.timer = setInterval(() => {
+        if (!testRunState.isRunning) return;
+
+        let p1 = testRunState.routePoints[currentSegment];
+        let p2 = testRunState.routePoints[currentSegment + 1];
+        if (!p1 || !p2) {
+          stopTestRun();
+          alert('試運転が完了しました！');
+          return;
+        }
+
+        let ratio = subStep / totalSteps;
+        let lat = p1.lat + (p2.lat - p1.lat) * ratio;
+        let lng = p1.lng + (p2.lng - p1.lng) * ratio;
+        let currentPos = L.latLng(lat, lng);
+
+        t.marker.setLatLng(currentPos);
+        if (isTracking) {
+          map.panTo(currentPos, { animate: true, duration: 0.1 });
+        }
+
+        subStep++;
+        if (subStep > totalSteps) {
+          subStep = 0;
+          currentSegment++;
+          if (currentSegment >= testRunState.routePoints.length - 1) {
+            stopTestRun();
+            alert('試運転が完了しました！');
+          }
+        }
+      }, 50);
+    }
+
+    function stopTestRun() {
+      testRunState.isRunning = false;
+      if (testRunState.timer) clearInterval(testRunState.timer);
+      const btn = document.getElementById('test-run-btn');
+      btn.innerText = '▶ 試運転開始';
+      btn.style.background = '#00ffcc';
+      btn.style.color = '#000';
+    }
+
     function openShareModal() {
       let currentStationCount = stations.length;
       document.getElementById('share-station-count').innerText = currentStationCount;
@@ -521,7 +628,6 @@
         let title = isAnonymous ? '名無しの作品集' : titleInput;
         let tags = tagsInput ? tagsInput.split(',').map(t => t.trim()).filter(Boolean) : [];
 
-        // 💡 路線データから Leaflet オブジェクト（polyline等）や循環参照を完全に排除してプレーンな配列データにする
         let optimizedLines = lines.map(l => {
           let simplified = simplifyPoints(l.points, interval);
           return {
@@ -534,7 +640,6 @@
           };
         });
 
-        // 💡 駅データもマーカーを除外し、純粋な座標データのみにする
         let optimizedStations = stations.map(s => ({
           id: s.id,
           name: s.name,
@@ -562,7 +667,6 @@
         let dataBytes = new TextEncoder().encode(jsonString).length;
         let recommendedLimitBytes = 1024 * 1024; // 1MB
 
-        // 💡 容量超過のチェック
         if (dataBytes > recommendedLimitBytes) {
           let overBytes = dataBytes - recommendedLimitBytes;
           let overText = overBytes > 1024 * 1024 ? (overBytes / (1024 * 1024)).toFixed(2) + ' MB' : (overBytes / 1024).toFixed(1) + ' KB';
