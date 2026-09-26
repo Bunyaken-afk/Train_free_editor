@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>電車内表示器エディタ v4.21 (リアス海岸対応・高耐久メモリ拡張版)</title>
+  <title>電車内表示器エディタ v4.27 (循環参照エラー完全修復版)</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -128,7 +128,13 @@
 
     <div style="height: 16px; border-left: 1px solid #555; margin: 0 4px;"></div>
 
-    <button class="header-btn optimize" onclick="optimizeAllLinesPoints()" title="リアス海岸の複雑な形を維持しつつ密集点を厳格に間引いてメモリを節約">🧹 厳格間引き(海岸対応)</button>
+    <div style="display:flex; align-items:center; gap:4px; background:#222; padding:2px 6px; border-radius:4px; border:1px solid #555;">
+      <span style="font-size:11px; color:#aaa;">間引き間隔:</span>
+      <input type="number" id="simplify-distance-input" value="50" min="5" max="500" step="5" style="width:50px; margin:0; padding:2px; font-size:11px; text-align:center; background:#111; color:#fff; border:1px solid #444;">
+      <span style="font-size:11px; color:#aaa;">m</span>
+    </div>
+    <button class="header-btn optimize" onclick="optimizeAllLinesPoints()" title="指定した間隔で厳格に間引きし、メモリを節約">🧹 間引き実行</button>
+
     <button id="track-btn" class="header-btn" onclick="toggleTracking()">🎥 追尾 OFF</button>
     <button id="audio-btn" class="header-btn" onclick="toggleAudio()">🔊 アナウンス OFF</button>
     <button class="header-btn capture" onclick="openCaptureModal()">📸 路線図出力</button>
@@ -333,17 +339,15 @@
   </div>
 
   <script>
-    // --- リアス海岸対応・高耐久メモリ拡張エディタ (v4.21) ---
+    // --- 循環参照完全修復版エディタ (v4.27) ---
 
-    // データベース設定（容量制限を大幅に引き上げ・大容量バッファ対応）
     localforage.config({
-      name: 'TrainEditorApp_RiasCoast_v7',
-      storeName: 'works_rias_coast_v7',
-      size: 50 * 1024 * 1024 // 50MBまでの大容量データを許容
+      name: 'TrainEditorApp_RiasCoast_v13',
+      storeName: 'works_rias_coast_v13',
+      size: 50 * 1024 * 1024
     });
 
-    // 💡 リアス海岸特有の細かい入り組んだ地形の美しさを保ちつつ、微小なブレだけを削る厳格な間引き関数（しきい値: 12m）
-    function simplifyPoints(points, minDistanceMeters = 12) {
+    function simplifyPoints(points, minDistanceMeters = 50) {
       if (!points || points.length <= 2) return points;
       let simplified = [points[0]];
       let lastPoint = points[0];
@@ -353,7 +357,6 @@
         let latlng = L.latLng(p.lat || p[0], p.lng || p[1]);
         let lastLatlng = L.latLng(lastPoint.lat || lastPoint[0], lastPoint.lng || lastPoint[1]);
         
-        // 12メートル以上の間隔で変化する海岸線や重要な曲がり角はキープし、密集点をスマートに掃除
         if (latlng.distanceTo(lastLatlng) >= minDistanceMeters) {
           simplified.push(p);
           lastPoint = p;
@@ -365,14 +368,15 @@
 
     function optimizeAllLinesPoints() {
       if (lines.length === 0) return alert('間引く路線がありません。');
+      let interval = parseFloat(document.getElementById('simplify-distance-input').value) || 50;
       let before = 0, after = 0;
       lines.forEach(l => {
         before += l.points.length;
-        l.points = simplifyPoints(l.points, 12); // リアス海岸向けの厳格な12m間引き
+        l.points = simplifyPoints(l.points, interval);
         after += l.points.length;
         updateLinePolylines(l);
       });
-      alert(`🧹 リアス海岸向け厳格間引きを実行しました！\n（総ポイント数: ${before}点 ➔ ${after}点 に最適化・軽量化）`);
+      alert(`🧹 間引き間隔 [${interval}m] で整理しました！\n（総ポイント数: ${before}点 ➔ ${after}点 に軽量化）`);
     }
 
     async function dbGetAllWorks() {
@@ -422,12 +426,13 @@
       }
     }
 
-    const map = L.map('map', { dragging: true, preferCanvas: true }).setView([39.45, 141.95], 10); // 三陸・リアス海岸方面を中心に初期配置
+    const map = L.map('map', { dragging: true, preferCanvas: true }).setView([39.45, 141.95], 10);
 
     L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png', {
       attribution: '&copy; <a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank">国土地理院</a>',
       maxZoom: 18,
-      crossOrigin: true
+      crossOrigin: true,
+      errorTileUrl: ''
     }).addTo(map);
 
     let currentMode = 'pan';
@@ -501,57 +506,79 @@
     function closeShareModal() { document.getElementById('share-modal').style.display = 'none'; }
 
     async function executeShare() {
-      if (stations.length < 15) {
-        alert('駅数が15駅未満のため共有できません。');
-        closeShareModal();
-        return;
-      }
-
-      let titleInput = document.getElementById('share-work-name').value.trim();
-      let tagsInput = document.getElementById('share-work-tags').value.trim();
-      
-      let isAnonymous = !titleInput;
-      let title = isAnonymous ? '名無しの作品集' : titleInput;
-      let tags = tagsInput ? tagsInput.split(',').map(t => t.trim()).filter(Boolean) : [];
-
-      // 共有時にリアス海岸向け厳格間引き（12m）を適用して確実にエラーを回避
-      let optimizedLines = lines.map(l => {
-        let simplified = simplifyPoints(l.points, 12);
-        return {
-          ...l,
-          points: simplified.map(p => [Number((p.lat || p[0]).toFixed(5)), Number((p.lng || p[1]).toFixed(5))])
-        };
-      });
-
-      let optimizedStations = stations.map(s => ({
-        id: s.id,
-        name: s.name,
-        latlng: [Number(s.latlng.lat.toFixed(5)), Number(s.latlng.lng.toFixed(5))]
-      }));
-
-      let workData = {
-        id: 'work_' + Date.now(),
-        title: title,
-        isAnonymous: isAnonymous,
-        tags: tags,
-        likes: 0,
-        timestamp: Date.now(),
-        expiresAt: isAnonymous ? Date.now() + 3600 * 1000 : null,
-        payload: {
-          folders,
-          lines: optimizedLines,
-          stations: optimizedStations,
-          expressTypes,
-          expressStops
-        }
-      };
-
       try {
+        if (stations.length < 15) {
+          alert('駅数が15駅未満のため共有できません。');
+          closeShareModal();
+          return;
+        }
+
+        let titleInput = document.getElementById('share-work-name').value.trim();
+        let tagsInput = document.getElementById('share-work-tags').value.trim();
+        let interval = parseFloat(document.getElementById('simplify-distance-input').value) || 50;
+        
+        let isAnonymous = !titleInput;
+        let title = isAnonymous ? '名無しの作品集' : titleInput;
+        let tags = tagsInput ? tagsInput.split(',').map(t => t.trim()).filter(Boolean) : [];
+
+        // 💡 路線データから Leaflet オブジェクト（polyline等）や循環参照を完全に排除してプレーンな配列データにする
+        let optimizedLines = lines.map(l => {
+          let simplified = simplifyPoints(l.points, interval);
+          return {
+            id: l.id,
+            name: l.name,
+            color: l.color,
+            folderId: l.folderId,
+            isBranch: l.isBranch,
+            points: simplified.map(p => [Number((p.lat || p[0]).toFixed(5)), Number((p.lng || p[1]).toFixed(5))])
+          };
+        });
+
+        // 💡 駅データもマーカーを除外し、純粋な座標データのみにする
+        let optimizedStations = stations.map(s => ({
+          id: s.id,
+          name: s.name,
+          latlng: [Number(s.latlng.lat.toFixed(5)), Number(s.latlng.lng.toFixed(5))]
+        }));
+
+        let workData = {
+          id: 'work_' + Date.now(),
+          title: title,
+          isAnonymous: isAnonymous,
+          tags: tags,
+          likes: 0,
+          timestamp: Date.now(),
+          expiresAt: isAnonymous ? Date.now() + 3600 * 1000 : null,
+          payload: {
+            folders: folders.map(f => ({ id: f.id, name: f.name, color: f.color, isBranchFolder: f.isBranchFolder })),
+            lines: optimizedLines,
+            stations: optimizedStations,
+            expressTypes,
+            expressStops
+          }
+        };
+
+        let jsonString = JSON.stringify(workData);
+        let dataBytes = new TextEncoder().encode(jsonString).length;
+        let recommendedLimitBytes = 1024 * 1024; // 1MB
+
+        // 💡 容量超過のチェック
+        if (dataBytes > recommendedLimitBytes) {
+          let overBytes = dataBytes - recommendedLimitBytes;
+          let overText = overBytes > 1024 * 1024 ? (overBytes / (1024 * 1024)).toFixed(2) + ' MB' : (overBytes / 1024).toFixed(1) + ' KB';
+          let currentMB = (dataBytes / (1024 * 1024)).toFixed(2);
+          
+          alert(`⚠️ 【容量上限オーバーの警告】\n現在のデータサイズは ${currentMB} MB です。\n推奨上限（1.0 MB）を 【 ${overText} 】 超過しています！\n\n➡ 「間引き間隔」の数値を現在(${interval}m)より大きくして再度「間引き実行」を行ってください。`);
+          return;
+        }
+
         await dbSaveWork(workData);
         closeShareModal();
         alert(isAnonymous ? '名無しの作品集として1時間限定で共有しました！' : `「${title}」をオンライン共有しました！`);
-      } catch (e) {
-        alert('エラー: データ量が上限を超えています。さらに「厳格間引き」ボタンを押して軽量化してください。');
+
+      } catch (err) {
+        console.error('共有処理エラー:', err);
+        alert(`❌ 【共有処理でエラーが発生しました】\n原因: ${err.message || err}`);
       }
     }
 
@@ -658,7 +685,7 @@
       
       setTimeout(() => {
         let subMap = L.map('sub-map').setView([39.45, 141.95], 10);
-        L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(subMap);
+        L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png', { maxZoom: 18, crossOrigin: true }).addTo(subMap);
         
         if (work.payload.stations) {
           work.payload.stations.forEach(s => {
@@ -735,10 +762,15 @@
     }
 
     function exportJSON() {
+      let interval = parseFloat(document.getElementById('simplify-distance-input').value) || 50;
       const optimizedLines = lines.map(l => {
-        let simplified = simplifyPoints(l.points, 12);
+        let simplified = simplifyPoints(l.points, interval);
         return {
-          ...l,
+          id: l.id,
+          name: l.name,
+          color: l.color,
+          folderId: l.folderId,
+          isBranch: l.isBranch,
           points: simplified.map(p => [Number((p.lat || p[0]).toFixed(5)), Number((p.lng || p[1]).toFixed(5))])
         };
       });
@@ -750,7 +782,7 @@
       }));
 
       const data = {
-        folders,
+        folders: folders.map(f => ({ id: f.id, name: f.name, color: f.color, isBranchFolder: f.isBranchFolder })),
         lines: optimizedLines,
         stations: optimizedStations,
         expressTypes,
@@ -763,7 +795,7 @@
       a.href = URL.createObjectURL(blob);
       a.download = `train_editor_rias_${Date.now()}.json`;
       a.click();
-      alert('路線図データをJSONファイルとしてローカル保存しました！');
+      alert(`間引き間隔 [${interval}m] で調整してJSON保存しました！`);
     }
 
     function importJSON(mode) {
@@ -872,8 +904,9 @@
     window.addEventListener('mouseup', () => { isPanning = false; });
 
     function captureRealMap() {
-      html2canvas(document.getElementById('map'), { useCORS: true, allowTaint: true, logging: false, scale: 1.5 })
-        .then(renderedCanvas => { document.getElementById('captured-image').src = renderedCanvas.toDataURL('image/png'); });
+      html2canvas(document.getElementById('map'), { useCORS: true, allowTaint: false, logging: false, scale: 1.5 })
+        .then(renderedCanvas => { document.getElementById('captured-image').src = renderedCanvas.toDataURL('image/png'); })
+        .catch(err => { console.error(err); alert('実地図のキャプチャに失敗しました。'); });
     }
 
     function getNearestLineAndIndexOnLine(latlng, lineObj) {
@@ -1336,7 +1369,7 @@
           html: `<div class="station-marker" style="background:${isStopped ? exp.color : '#555'};"></div>`,
           iconSize: [14, 14], iconAnchor: [7, 7]
         }));
-        st.marker.bindTooltip(`${st.name} (${exp.name}:${isStopped ? '停車' : '通過'})`, { permanent: true, direction: 'top' });
+        st.marker.bindTooltip(`${st.name} (${exp.name}: ${isStopped ? '停車' : '通過'})`, { permanent: true, direction: 'top' });
         return;
       }
 
@@ -1424,8 +1457,8 @@
         let depSec = arrSec + (idx === routeStations.length - 1 ? 0 : t.stopTimeSec);
         totalSec = depSec;
 
-        let arrStr = `${String(Math.floor(arrSec/3600)\%24).padStart(2,'0')}:${String(Math.floor((arrSec%3600)/60)).padStart(2,'0')}`;
-        let depStr = `${String(Math.floor(depSec/3600)\%24).padStart(2,'0')}:${String(Math.floor((depSec%3600)/60)).padStart(2,'0')}`;
+        let arrStr = `${String(Math.floor(arrSec/3600)%24).padStart(2,'0')}:${String(Math.floor((arrSec%3600)/60)).padStart(2,'0')}`;
+        let depStr = `${String(Math.floor(depSec/3600)%24).padStart(2,'0')}:${String(Math.floor((depSec%3600)/60)).padStart(2,'0')}`;
 
         t.timetable.push({ station: st, arr: arrStr, dep: depStr });
 
@@ -1440,7 +1473,7 @@
 
     function renderLEDPreview(train) {
       const container = document.getElementById('display-text');
-      container.innerHTML = ``;
+      container.innerHTML = '';
       if (!train.timetable || train.timetable.length === 0) return;
 
       let textToShow = `至 ${train.endStation ? train.endStation.name : ''} [${train.expressName}]`;
