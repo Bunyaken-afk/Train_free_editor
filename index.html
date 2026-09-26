@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>電車内表示器エディタ v4.30 (画面二重化修正・完全版)</title>
+  <title>電車内表示器エディタ v4.31 (完全修正版)</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -11,9 +11,9 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: sans-serif; height: 100vh; display: flex; flex-direction: column; background: #1a1a1a; color: #fff; overflow: hidden; }
+    html, body { width: 100vw; height: 100vh; overflow: hidden; background: #1a1a1a; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; }
     
-    header { background: #2a2a2a; padding: 6px 12px; display: flex; gap: 8px; align-items: center; border-bottom: 2px solid #444; z-index: 1000; flex-wrap: nowrap; min-height: 44px; flex-shrink: 0; }
+    header { background: #2a2a2a; padding: 6px 12px; display: flex; gap: 8px; align-items: center; border-bottom: 2px solid #444; z-index: 1000; flex-wrap: nowrap; height: 50px; flex-shrink: 0; width: 100vw; }
     
     .header-group { display: flex; align-items: center; gap: 6px; }
     
@@ -40,7 +40,7 @@
       background: #1e1e1e; border: 1px solid #00aaff; border-radius: 4px; padding: 4px 10px; font-size: 11px; color: #00ffcc; display: flex; align-items: center; gap: 6px; white-space: nowrap;
     }
 
-    #main-container { flex: 1; display: flex; position: relative; overflow: hidden; width: 100vw; height: calc(100vh - 44px); }
+    #main-container { flex: 1; display: flex; width: 100vw; height: calc(100vh - 50px); position: relative; overflow: hidden; }
     #map { flex: 1; height: 100%; background: #222; }
 
     #sidebar { width: 430px; background: #222; border-left: 2px solid #444; display: flex; flex-direction: column; gap: 10px; padding: 10px; overflow-y: auto; z-index: 1000; flex-shrink: 0; height: 100%; }
@@ -345,11 +345,11 @@
   </div>
 
   <script>
-    // --- 画面構造整理・試運転完全版エディタ (v4.30) ---
+    // --- 画面構造リセット・完全版エディタ (v4.31) ---
 
     localforage.config({
-      name: 'TrainEditorApp_RiasCoast_v16',
-      storeName: 'works_rias_coast_v16',
+      name: 'TrainEditorApp_RiasCoast_v17',
+      storeName: 'works_rias_coast_v17',
       size: 50 * 1024 * 1024
     });
 
@@ -500,7 +500,6 @@
 
     function findLineSegmentBetweenStations(stA, stB) {
       for (let line of lines) {
-        let matchA = null, matchB = null;
         let minDistA = Infinity, minDistB = Infinity;
         let idxA = 0, idxB = 0;
 
