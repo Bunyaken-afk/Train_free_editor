@@ -3,10 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>電車内表示器エディタ v4.19 (スマート間引き機能付き)</title>
+  <title>電車内表示器エディタ v4.20 (JSON共有・閲覧完全対応版)</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: sans-serif; height: 100vh; display: flex; flex-direction: column; background: #1a1a1a; color: #fff; overflow: hidden; }
@@ -30,6 +32,8 @@
     .header-btn.plan { background: #17a2b8; border-color: #20c997; font-weight: bold; }
     .header-btn.danger { background: #d9534f; border-color: #c9302c; font-weight: bold; }
     .header-btn.optimize { background: #e67e22; border-color: #d35400; font-weight: bold; color: #fff; }
+    .header-btn.online-share { background: #20c997; color: #000; font-weight: bold; }
+    .header-btn.online-browse { background: #ffc107; color: #000; font-weight: bold; }
 
     .key-guide-box {
       background: #1e1e1e; border: 1px solid #00aaff; border-radius: 4px; padding: 4px 10px; font-size: 11px; color: #00ffcc; display: flex; align-items: center; gap: 6px; white-space: nowrap;
@@ -75,9 +79,27 @@
     .modal-overlay {
       display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.9); z-index: 3000; justify-content: center; align-items: center; padding: 30px;
     }
+    .modal-content-fullscreen {
+      background: #222; border: 2px solid #555; border-radius: 8px; padding: 20px; width: 95vw; height: 92vh; display: flex; flex-direction: column; gap: 12px; overflow: hidden;
+    }
     .modal-content-normal {
       background: #222; border: 2px solid #555; border-radius: 8px; padding: 20px; width: 90vw; max-width: 600px; display: flex; flex-direction: column; gap: 12px;
     }
+
+    .works-grid-container {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      grid-template-rows: repeat(3, 1fr);
+      gap: 12px;
+      flex: 1;
+      overflow-y: auto;
+      padding: 4px;
+    }
+    .work-card {
+      background: #2a2a2a; border: 1px solid #444; border-radius: 6px; padding: 10px; display: flex; flex-direction: column; justify-content: space-between; gap: 6px; font-size: 11px;
+    }
+    .work-card-header { display: flex; justify-content: space-between; align-items: center; }
+    .tag-badge { background: #17a2b8; color: #fff; padding: 2px 4px; border-radius: 3px; font-size: 9px; display: inline-block; margin-right: 2px; }
   </style>
 </head>
 <body>
@@ -106,14 +128,14 @@
 
     <div style="height: 16px; border-left: 1px solid #555; margin: 0 4px;"></div>
 
-    <!-- 🧹 新しく追加したスマート間引きボタン -->
-    <button class="header-btn optimize" onclick="optimizeAllLinesPoints()" title="長距離の直線や形を維持しつつ、マウスの微小なブレなどの細かい密集点だけを綺麗に間引きます">🧹 細かい点を間引き</button>
-
+    <button class="header-btn optimize" onclick="optimizeAllLinesPoints()" title="細かい密集点をきれいに間引いて軽量化">🧹 細かい点を間引き</button>
     <button id="track-btn" class="header-btn" onclick="toggleTracking()">🎥 追尾 OFF</button>
     <button id="audio-btn" class="header-btn" onclick="toggleAudio()">🔊 アナウンス OFF</button>
     <button class="header-btn capture" onclick="openCaptureModal()">📸 路線図出力</button>
 
     <div style="margin-left: auto; display: flex; gap: 6px;">
+      <button class="header-btn online-share" onclick="openShareModal()">🌐 共有</button>
+      <button class="header-btn online-browse" onclick="openBrowseModal()">📖 閲覧</button>
       <button class="header-btn" onclick="exportJSON()" style="background:#28a745; font-weight:bold;">💾 JSON保存</button>
       <button class="header-btn" onclick="importJSON('overwrite')" style="background:#d9534f;" title="上書き読込">📂 上書き読込</button>
       <button class="header-btn" onclick="importJSON('append')" style="background:#f0ad4e;" title="追加読込">📂 追加読込</button>
@@ -226,6 +248,62 @@
     </div>
   </div>
 
+  <!-- 共有モーダル -->
+  <div id="share-modal" class="modal-overlay">
+    <div class="modal-content-normal">
+      <h3 style="color: #20c997;">🌐 作品をオンライン共有</h3>
+      <p style="font-size: 12px; color: #ccc;">作品に名前を付けて全体公開するか、名前なし（名無しの作品集・1時間限定）で共有できます。<br><b style="color:#ffcc00;">※共有には15駅以上配置されている必要があります（現在: <span id="share-station-count">0</span>駅）</b></p>
+      <div>
+        <label style="font-size: 11px;">作品名 (空欄の場合は「名無しの作品集」):</label>
+        <input type="text" id="share-work-name" placeholder="例: あおぞら市高速鉄道網">
+      </div>
+      <div>
+        <label style="font-size: 11px;">地域・市町村タグ (カンマ区切り、例: あおぞら市, ひまわり町):</label>
+        <input type="text" id="share-work-tags" placeholder="例: あおぞら市, ひまわり町">
+      </div>
+      <div style="display: flex; gap: 10px; margin-top: 10px;">
+        <button onclick="executeShare()" style="flex:1; background:#28a745;">🚀 共有する</button>
+        <button onclick="closeShareModal()" style="flex:1; background:#6c757d;">キャンセル</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 閲覧モーダル -->
+  <div id="browse-modal" class="modal-overlay">
+    <div class="modal-content-fullscreen">
+      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #444; padding-bottom: 8px;">
+        <h3 style="color: #ffc107;">📖 オンライン作品閲覧・検索 (いいね数順)</h3>
+        <button onclick="closeBrowseModal()" style="width: auto; padding: 4px 14px; background:#6c757d; font-size:12px;">✖ 閉じる</button>
+      </div>
+      
+      <div style="display: flex; gap: 10px; background: #1e1e1e; padding: 8px; border-radius: 4px; align-items: center;">
+        <div style="flex:1;">
+          <input type="text" id="search-name-input" placeholder="🔍 作品名で検索..." oninput="renderBrowseWorks()" style="margin:0; font-size:12px;">
+        </div>
+        <div style="flex:1;">
+          <input type="text" id="search-tag-input" placeholder="🏷️ タグ (地域名) で検索..." oninput="renderBrowseWorks()" style="margin:0; font-size:12px;">
+        </div>
+      </div>
+
+      <p style="font-size: 11px; color: #aaa;">作品に「いいね」をすると、マップアイコンから「上書き読み込み」または「追加読み込み」を選択できるようになります。（1人1作品につき1いいね）</p>
+      
+      <div id="browse-works-container" class="works-grid-container"></div>
+    </div>
+  </div>
+
+  <!-- プレビューモーダル -->
+  <div id="preview-modal" class="modal-overlay">
+    <div class="modal-content-normal" style="max-width: 900px; height: 80vh;">
+      <h3 id="preview-title" style="color: #00aaff;">👁️ 作品プレビュー</h3>
+      <div id="preview-map-container" style="flex: 1; background: #111; border-radius: 6px; overflow: hidden; position: relative;">
+        <div style="display:flex; justify-content:center; align-items:center; height:100%; color:#888;">プレビュー読み込み中...</div>
+      </div>
+      <div style="display: flex; justify-content: flex-end; margin-top: 10px;">
+        <button onclick="closePreviewModal()" style="width: auto; padding: 6px 20px; background:#6c757d;">閉じる</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 画像出力モーダル -->
   <div id="capture-modal" class="modal-overlay">
     <div class="modal-content-normal" style="max-width: 800px; height: 85vh;">
@@ -255,10 +333,13 @@
   </div>
 
   <script>
-    // --- 路線図スマート間引きエディタ (v4.19) ---
+    // --- 共有・閲覧対応型 軽量JSONストレージマネージャー (v4.20) ---
+    localforage.config({
+      name: 'TrainEditorApp_JSONShare_v6',
+      storeName: 'works_json_share_v6'
+    });
 
-    // 💡 詳細リクエストに対応した間引き関数：
-    // 「長距離の直線や形を形作る重要なポイントはそのまま残し、マウスのブレなどで近すぎる場所（5メートル未満の間隔で密集している細かい点）だけを綺麗に間引く」
+    // 5メートル未満の細かい密集点を綺麗に間引いてデータサイズを軽量化する関数
     function simplifyPoints(points, minDistanceMeters = 5) {
       if (!points || points.length <= 2) return points;
       let simplified = [points[0]];
@@ -269,35 +350,74 @@
         let latlng = L.latLng(p.lat || p[0], p.lng || p[1]);
         let lastLatlng = L.latLng(lastPoint.lat || lastPoint[0], lastPoint.lng || lastPoint[1]);
         
-        // 5メートル以上離れた点（しっかり形が変わる部分）はキープし、近すぎる細かすぎる点はスキップ
         if (latlng.distanceTo(lastLatlng) >= minDistanceMeters) {
           simplified.push(p);
           lastPoint = p;
         }
       }
-      // 終点は必ずキープ
       simplified.push(points[points.length - 1]);
       return simplified;
     }
 
-    // 🧹 ボタンを押したときに全路線の細かい点を一括で綺麗に間引く機能
     function optimizeAllLinesPoints() {
-      if (lines.length === 0) {
-        alert('間引く路線がありません。');
-        return;
-      }
-
-      let totalBefore = 0;
-      let totalAfter = 0;
-
+      if (lines.length === 0) return alert('間引く路線がありません。');
+      let before = 0, after = 0;
       lines.forEach(l => {
-        totalBefore += l.points.length;
-        l.points = simplifyPoints(l.points, 5); // 5メートル間隔で細かい点をクリーンアップ
-        totalAfter += l.points.length;
-        updateLinePolylines(l); // マップ上の描画を更新
+        before += l.points.length;
+        l.points = simplifyPoints(l.points, 5);
+        after += l.points.length;
+        updateLinePolylines(l);
       });
+      alert(`🧹 路線データの細かい点を整理しました！\n（総ポイント数: ${before}点 ➔ ${after}点 に軽量化）`);
+    }
 
-      alert(`🧹 路線データの細かい点を整理しました！\n（総ポイント数: ${totalBefore}点 ➔ ${totalAfter}点 に軽量化されました）`);
+    // 共有データを取得する際、圧縮されたJSONを安全にデコードして返す
+    async function dbGetAllWorks() {
+      try {
+        let keys = await localforage.keys();
+        let workKeys = keys.filter(k => k.startsWith('jsonwork_'));
+        let works = [];
+
+        for (let wKey of workKeys) {
+          let compressed = await localforage.getItem(wKey);
+          if (!compressed) continue;
+          try {
+            let decompressed = LZString.decompressFromUTF16(compressed);
+            if (decompressed) {
+              works.push(JSON.parse(decompressed));
+            }
+          } catch (e) {
+            console.error('復元エラー:', e);
+          }
+        }
+        return works;
+      } catch (e) {
+        console.error('全データ取得失敗:', e);
+        return [];
+      }
+    }
+
+    // 共有時に自動軽量化を行った上でLZ-Stringで超圧縮し、IndexedDBへ1ファイルとして安全に保存
+    async function dbSaveWork(workData) {
+      try {
+        let workId = workData.id;
+        let jsonStr = JSON.stringify(workData);
+        let compressed = LZString.compressToUTF16(jsonStr);
+
+        await localforage.setItem(`jsonwork_${workId}`, compressed);
+        return true;
+      } catch (e) {
+        console.error('共有保存失敗:', e);
+        throw e;
+      }
+    }
+
+    async function dbDeleteWork(workId) {
+      try {
+        await localforage.removeItem(`jsonwork_${workId}`);
+      } catch (e) {
+        console.error('削除失敗:', e);
+      }
     }
 
     const map = L.map('map', { dragging: true, preferCanvas: true }).setView([35.6812, 139.7671], 11);
@@ -317,6 +437,8 @@
       { id: 'express_local_fixed', name: '各駅停車', color: '#007acc', isFixed: true }
     ];
     let expressStops = {}; 
+    
+    let userLikedWorks = JSON.parse(localStorage.getItem('transit_user_likes') || '{}');
 
     let currentDrawingPoints = [];
     let currentPolyline = null;
@@ -361,9 +483,258 @@
       btn.classList.toggle('toggle-on', isAudioOn);
     }
 
-    // JSON出力（保存・共有用：自動で間引き処理を挟んでファイルサイズを極限までコンパクトに）
+    function openShareModal() {
+      let currentStationCount = stations.length;
+      document.getElementById('share-station-count').innerText = currentStationCount;
+      
+      if (currentStationCount < 15) {
+        alert(`オンライン共有には【15駅以上】が必要です。（現在の駅数: ${currentStationCount}駅）`);
+        return;
+      }
+
+      document.getElementById('share-modal').style.display = 'flex';
+      document.getElementById('share-work-name').value = '';
+      document.getElementById('share-work-tags').value = '';
+    }
+    function closeShareModal() { document.getElementById('share-modal').style.display = 'none'; }
+
+    // 🌐 共有実行：自動間引きをかけて軽量化した上でデータベースへ一括保存
+    async function executeShare() {
+      if (stations.length < 15) {
+        alert('駅数が15駅未満のため共有できません。');
+        closeShareModal();
+        return;
+      }
+
+      let titleInput = document.getElementById('share-work-name').value.trim();
+      let tagsInput = document.getElementById('share-work-tags').value.trim();
+      
+      let isAnonymous = !titleInput;
+      let title = isAnonymous ? '名無しの作品集' : titleInput;
+      let tags = tagsInput ? tagsInput.split(',').map(t => t.trim()).filter(Boolean) : [];
+
+      // 保存時に自動間引き（5m間隔）を行ってデータサイズを極限まで小さくする
+      let optimizedLines = lines.map(l => {
+        let simplified = simplifyPoints(l.points, 5);
+        return {
+          ...l,
+          points: simplified.map(p => [Number((p.lat || p[0]).toFixed(5)), Number((p.lng || p[1]).toFixed(5))])
+        };
+      });
+
+      let optimizedStations = stations.map(s => ({
+        id: s.id,
+        name: s.name,
+        latlng: [Number(s.latlng.lat.toFixed(5)), Number(s.latlng.lng.toFixed(5))]
+      }));
+
+      let workData = {
+        id: 'work_' + Date.now(),
+        title: title,
+        isAnonymous: isAnonymous,
+        tags: tags,
+        likes: 0,
+        timestamp: Date.now(),
+        expiresAt: isAnonymous ? Date.now() + 3600 * 1000 : null,
+        payload: {
+          folders,
+          lines: optimizedLines,
+          stations: optimizedStations,
+          expressTypes,
+          expressStops
+        }
+      };
+
+      try {
+        await dbSaveWork(workData);
+        closeShareModal();
+        alert(isAnonymous ? '名無しの作品集として1時間限定で共有しました！' : `「${title}」をオンライン共有しました！`);
+      } catch (e) {
+        alert('エラー: データの軽量化を行いましたが、ブラウザの容量制限により共有に失敗しました。');
+      }
+    }
+
+    async function openBrowseModal() {
+      document.getElementById('search-name-input').value = '';
+      document.getElementById('search-tag-input').value = '';
+      await renderBrowseWorks();
+      document.getElementById('browse-modal').style.display = 'flex';
+    }
+
+    function closeBrowseModal() { document.getElementById('browse-modal').style.display = 'none'; }
+
+    async function renderBrowseWorks() {
+      let now = Date.now();
+      let allWorks = await dbGetAllWorks();
+
+      for (let w of allWorks) {
+        if (w.expiresAt && w.expiresAt <= now) {
+          await dbDeleteWork(w.id);
+        }
+      }
+      allWorks = allWorks.filter(w => !w.expiresAt || w.expiresAt > now);
+
+      let nameQuery = document.getElementById('search-name-input').value.trim().toLowerCase();
+      let tagQuery = document.getElementById('search-tag-input').value.trim().toLowerCase();
+
+      let filtered = allWorks.filter(w => {
+        let matchName = w.title.toLowerCase().includes(nameQuery);
+        let matchTag = tagQuery === '' || w.tags.some(t => t.toLowerCase().includes(tagQuery));
+        return matchName && matchTag;
+      });
+
+      let sortedWorks = filtered.sort((a, b) => b.likes - a.likes).slice(0, 15);
+
+      let container = document.getElementById('browse-works-container');
+      container.innerHTML = '';
+
+      if (sortedWorks.length === 0) {
+        container.innerHTML = '<p style="font-size: 12px; color: #888; text-align: center; grid-column: span 5; padding: 40px;">該当する作品が見つかりません。</p>';
+        return;
+      }
+
+      sortedWorks.forEach(w => {
+        let isLiked = !!userLikedWorks[w.id];
+        let card = document.createElement('div');
+        card.className = 'work-card';
+        
+        let tagsHtml = w.tags.map(tag => `<span class="tag-badge">#${tag}</span>`).join('');
+        let timeRemaining = w.expiresAt ? `<span style="font-size:9px; color:#ffcc00;">(${Math.ceil((w.expiresAt - now)/60000)}分で消去)</span>` : '';
+
+        card.innerHTML = `
+          <div>
+            <div class="work-card-header">
+              <b style="font-size: 12px; color: #00ffcc; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:110px;" title="${w.title}">${w.title}</b>
+              <span style="font-size: 10px; color: #aaa;">❤️ ${w.likes}</span>
+            </div>
+            <div style="margin:2px 0; height:24px; overflow:hidden;">${tagsHtml || '<span style="font-size:9px; color:#666;">タグなし</span>'}</div>
+            <div style="font-size:9px; color:#888;">${timeRemaining}</div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 3px; margin-top: 4px;">
+            <button onclick="toggleLikeWork('${w.id}')" style="font-size:9px; padding:2px 4px; background:${isLiked ? '#d9534f' : '#333'}; border:1px solid #777;">
+              ${isLiked ? '❤️ 解除' : '🤍 いいね'}
+            </button>
+            <button onclick="previewWork('${w.id}')" style="font-size:9px; padding:2px 4px; background:#17a2b8;">👁️ プレビュー</button>
+            <button onclick="loadWorkToEditor('${w.id}', 'overwrite')" style="font-size:9px; padding:2px 4px; background:${isLiked ? '#d9534f' : '#555'}; ${isLiked ? '' : 'opacity:0.6;'}" title="上書き読込">
+              📂 上書き読込
+            </button>
+            <button onclick="loadWorkToEditor('${w.id}', 'append')" style="font-size:9px; padding:2px 4px; background:${isLiked ? '#f0ad4e' : '#555'}; ${isLiked ? '' : 'opacity:0.6;'}" title="追加読込">
+              📂 追加読込
+            </button>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    async function toggleLikeWork(workId) {
+      let allWorks = await dbGetAllWorks();
+      let work = allWorks.find(w => w.id === workId);
+      if (!work) return;
+
+      if (userLikedWorks[workId]) {
+        userLikedWorks[workId] = false;
+        work.likes = Math.max(0, work.likes - 1);
+      } else {
+        userLikedWorks[workId] = true;
+        work.likes += 1;
+      }
+
+      await dbSaveWork(work);
+      localStorage.setItem('transit_user_likes', JSON.stringify(userLikedWorks));
+      await renderBrowseWorks();
+    }
+
+    async function previewWork(workId) {
+      let allWorks = await dbGetAllWorks();
+      let work = allWorks.find(w => w.id === workId);
+      if (!work) return;
+      document.getElementById('preview-title').innerText = `👁️ プレビュー: ${work.title}`;
+      document.getElementById('preview-modal').style.display = 'flex';
+      
+      let container = document.getElementById('preview-map-container');
+      container.innerHTML = `<div id="sub-map" style="width:100%; height:100%;"></div>`;
+      
+      setTimeout(() => {
+        let subMap = L.map('sub-map').setView([35.6812, 139.7671], 11);
+        L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(subMap);
+        
+        if (work.payload.stations) {
+          work.payload.stations.forEach(s => {
+            L.marker(s.latlng).addTo(subMap).bindTooltip(s.name, { permanent: true });
+          });
+        }
+        if (work.payload.lines) {
+          work.payload.lines.forEach(l => {
+            L.polyline(l.points, { color: l.color, weight: 4 }).addTo(subMap);
+          });
+        }
+      }, 200);
+    }
+
+    function closePreviewModal() { document.getElementById('preview-modal').style.display = 'none'; }
+
+    async function loadWorkToEditor(workId, mode) {
+      let allWorks = await dbGetAllWorks();
+      let work = allWorks.find(w => w.id === workId);
+      if (!work) return;
+      if (!userLikedWorks[workId]) {
+        alert('この作品を利用するには、まず「いいね」を押してください！');
+        return;
+      }
+
+      if (mode === 'overwrite') {
+        lines.forEach(l => { if (l.polyline) map.removeLayer(l.polyline); if (l.borderPolyline) map.removeLayer(l.borderPolyline); });
+        stations.forEach(s => map.removeLayer(s.marker));
+        folders = []; lines = []; stations = []; trainList = []; 
+        expressTypes = [{ id: 'express_local_fixed', name: '各駅停車', color: '#007acc', isFixed: true }]; 
+        expressStops = {};
+      }
+
+      let data = work.payload;
+      if (data.expressTypes) {
+        data.expressTypes.forEach(et => {
+          if (!expressTypes.some(x => x.name === et.name)) expressTypes.push(et);
+        });
+      }
+      if (data.expressStops) {
+        for (let k in data.expressStops) {
+          if (!expressStops[k]) expressStops[k] = {};
+          Object.assign(expressStops[k], data.expressStops[k]);
+        }
+      }
+      if (data.folders) {
+        data.folders.forEach(f => {
+          if (!folders.some(x => x.id === f.id)) folders.push(f);
+        });
+      }
+      if (data.lines) {
+        data.lines.forEach(l => {
+          l.points = l.points.map(p => L.latLng(p[0], p[1]));
+          lines.push(l);
+          updateLinePolylines(l);
+        });
+      }
+      if (data.stations) {
+        data.stations.forEach(s => {
+          const latlng = Array.isArray(s.latlng) ? L.latLng(s.latlng[0], s.latlng[1]) : s.latlng;
+          const marker = L.marker(latlng, { icon: createStationMarkerIcon('各駅停車'), draggable: true }).addTo(map);
+          marker.bindTooltip(s.name, { permanent: true, direction: 'top' });
+          let newSt = { id: Date.now() + Math.random(), name: s.name, marker, latlng: marker.getLatLng() };
+          stations.push(newSt);
+          marker.on('click', (evt) => handleStationClick(evt, newSt));
+        });
+      }
+
+      sortExpressTypes();
+      renderLineList();
+      if (trainList.length === 0) addNewTrain();
+      closeBrowseModal();
+      alert(`作品「${work.title}」を${mode === 'overwrite' ? '上書き' : '追加'}読み込みしました！`);
+    }
+
+    // JSONローカル保存
     function exportJSON() {
-      // 保存時に自動で細かい点を間引いてエラーを予防
       const optimizedLines = lines.map(l => {
         let simplified = simplifyPoints(l.points, 5);
         return {
@@ -392,10 +763,9 @@
       a.href = URL.createObjectURL(blob);
       a.download = `train_editor_data_${Date.now()}.json`;
       a.click();
-      alert('路線図データをJSONファイルとして軽量保存しました！');
+      alert('路線図データをJSONファイルとしてローカル保存しました！');
     }
 
-    // JSON入力（読込用）
     function importJSON(mode) {
       const input = document.createElement('input');
       input.type = 'file';
@@ -448,9 +818,9 @@
             sortExpressTypes();
             renderLineList();
             if (trainList.length === 0) addNewTrain();
-            alert(mode === 'overwrite' ? 'JSONファイルを上書き読み込みしました！' : 'JSONファイルを追加読み込みしました！');
+            alert(mode === 'overwrite' ? '上書き読み込みしました！' : '追加読み込みしました！');
           } catch (err) {
-            alert('JSONファイルの読み込みに失敗しました。正しいデータ形式かご確認ください。');
+            alert('JSONファイルの読み込みに失敗しました。');
           }
         };
         reader.readAsText(e.target.files[0]);
@@ -1020,7 +1390,7 @@
       if (!t) return;
       t.expressName = document.getElementById('train-express-name').value.trim();
       t.speedKmH = parseFloat(document.getElementById('train-speed').value) || 60;
-      t.stopTimeSec = parseInt(document.getElementById('stop-time').value, 10) || 3;
+      t.stopTimeSec = parseInt(document.getElementById('stop-time').value, 10) / 1 || 3;
     }
 
     function generateTimetableForActiveTrain() {
