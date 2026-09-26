@@ -3,10 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>電車内表示器エディタ v4.10 (仮想地名対応・IndexedDB版)</title>
+  <title>電車内表示器エディタ v4.11 (LocalForage・圧縮対応版)</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <!-- LocalForage と LZ-String のCDN読み込み -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: sans-serif; height: 100vh; display: flex; flex-direction: column; background: #1a1a1a; color: #fff; overflow: hidden; }
@@ -115,6 +118,8 @@
         <option value="express-config">⚡ 速達種別停車駅設定</option>
       </select>
     </div>
+
+    <div id="key-guide-box" class="key-guide-box"><span>💡 【地図移動】マウスドラッグで地図を自由に移動できます。</span></div>
 
     <button class="header-btn plan" onclick="startPlanMode()">📐 新規計画線</button>
     <button class="header-btn success" id="finish-plan-btn" style="display:none; background:#20c997;" onclick="finishPlanLine()">📌 計画線・延長確定</button>
@@ -328,58 +333,58 @@
   </div>
 
   <script>
-    // --- IndexedDB ストレージマネージャー ---
-    const DB_NAME = 'TrainEditorDB_v2';
-    const STORE_NAME = 'online_works';
-    let db = null;
+    // --- LocalForage による大容量・高安定ストレージマネージャー ---
+    localforage.config({
+      name: 'TrainEditorApp',
+      storeName: 'online_works_v2'
+    });
 
-    function initDB() {
-      return new Promise((resolve, reject) => {
-        const request = indexedDB.open(DB_NAME, 1);
-        request.onerror = () => reject(request.error);
-        request.onsuccess = () => {
-          db = request.result;
-          resolve(db);
-        };
-        request.onupgradeneeded = (event) => {
-          const database = event.target.result;
-          if (!database.objectStoreNames.contains(STORE_NAME)) {
-            database.createObjectStore(STORE_NAME, { keyPath: 'id' });
+    async function dbGetAllWorks() {
+      try {
+        let keys = await localforage.keys();
+        let works = [];
+        for (let key of keys) {
+          let val = await localforage.getItem(key);
+          if (val) {
+            // LZ-Stringで圧縮されている場合は復元
+            if (typeof val === 'string' && val.startsWith('LZCOMP:')) {
+              try {
+                let decompressed = LZString.decompressFromUTF16(val.substring(7));
+                works.push(JSON.parse(decompressed));
+              } catch (e) {
+                console.error('解凍エラー:', e);
+              }
+            } else {
+              works.push(val);
+            }
           }
-        };
-      });
+        }
+        return works;
+      } catch (e) {
+        console.error('全データ取得失敗:', e);
+        return [];
+      }
     }
 
-    function dbGetAllWorks() {
-      return new Promise((resolve) => {
-        if (!db) { resolve([]); return; }
-        const transaction = db.transaction(STORE_NAME, 'readonly');
-        const store = transaction.objectStore(STORE_NAME);
-        const request = store.getAll();
-        request.onsuccess = () => resolve(request.result || []);
-        request.onerror = () => resolve([]);
-      });
+    async function dbSaveWork(workData) {
+      try {
+        let jsonStr = JSON.stringify(workData);
+        // 100MBクラスの大容量でも安全に保存できるよう、自動でLZ-String圧縮を適用
+        let compressed = 'LZCOMP:' + LZString.compressToUTF16(jsonStr);
+        await localforage.setItem(workData.id, compressed);
+        return true;
+      } catch (e) {
+        console.error('保存失敗:', e);
+        throw e;
+      }
     }
 
-    function dbSaveWork(workData) {
-      return new Promise((resolve, reject) => {
-        if (!db) { reject('DB未初期化'); return; }
-        const transaction = db.transaction(STORE_NAME, 'readwrite');
-        const store = transaction.objectStore(STORE_NAME);
-        const request = store.put(workData);
-        request.onsuccess = () => resolve(true);
-        request.onerror = () => reject(request.error);
-      });
-    }
-
-    function dbDeleteWork(workId) {
-      return new Promise((resolve) => {
-        if (!db) { resolve(); return; }
-        const transaction = db.transaction(STORE_NAME, 'readwrite');
-        const store = transaction.objectStore(STORE_NAME);
-        store.delete(workId);
-        transaction.oncomplete = () => resolve();
-      });
+    async function dbDeleteWork(workId) {
+      try {
+        await localforage.removeItem(workId);
+      } catch (e) {
+        console.error('削除失敗:', e);
+      }
     }
 
     const map = L.map('map', { dragging: true, preferCanvas: true }).setView([35.6812, 139.7671], 11);
@@ -430,6 +435,9 @@
       }
       box.innerHTML = `<span>${guideText}</span>`;
     }
+
+    let isTracking = false;
+    let isAudioOn = false;
 
     function toggleTracking() {
       isTracking = !isTracking;
@@ -507,7 +515,7 @@
         closeShareModal();
         alert(isAnonymous ? '名無しの作品集として1時間限定で共有しました！' : `「${title}」をオンライン共有しました！`);
       } catch (e) {
-        alert('エラー: データベースへの保存に失敗しました。');
+        alert('エラー: 大容量データの保存に失敗しました。');
       }
     }
 
@@ -798,6 +806,19 @@
     function captureRealMap() {
       html2canvas(document.getElementById('map'), { useCORS: true, allowTaint: true, logging: false, scale: 1.5 })
         .then(renderedCanvas => { document.getElementById('captured-image').src = renderedCanvas.toDataURL('image/png'); });
+    }
+
+    function getNearestLineAndIndexOnLine(latlng, lineObj) {
+      let minDist = Infinity;
+      let minIdx = 0;
+      for (let i = 0; i < lineObj.points.length; i++) {
+        let d = latlng.distanceTo(lineObj.points[i]);
+        if (d < minDist) {
+          minDist = d;
+          minIdx = i;
+        }
+      }
+      return { index: minIdx, dist: minDist };
     }
 
     function renderDeformedRouteMap() {
@@ -1386,12 +1407,9 @@
       }
     }
 
-    initDB().then(() => {
-      addNewTrain();
-      sortExpressTypes();
-    }).catch(err => {
-      console.error('IndexedDB initialization failed:', err);
-    });
+    // 初期化
+    addNewTrain();
+    sortExpressTypes();
   </script>
 </body>
 </html>
