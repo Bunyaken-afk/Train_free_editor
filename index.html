@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>電車内表示器エディタ v4.18 (JSONファイル完全ファイル共有版)</title>
+  <title>電車内表示器エディタ v4.19 (スマート間引き機能付き)</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -29,6 +29,7 @@
     .header-btn.capture { background: #911eb4; border-color: #b152d2; font-weight: bold; }
     .header-btn.plan { background: #17a2b8; border-color: #20c997; font-weight: bold; }
     .header-btn.danger { background: #d9534f; border-color: #c9302c; font-weight: bold; }
+    .header-btn.optimize { background: #e67e22; border-color: #d35400; font-weight: bold; color: #fff; }
 
     .key-guide-box {
       background: #1e1e1e; border: 1px solid #00aaff; border-radius: 4px; padding: 4px 10px; font-size: 11px; color: #00ffcc; display: flex; align-items: center; gap: 6px; white-space: nowrap;
@@ -105,12 +106,15 @@
 
     <div style="height: 16px; border-left: 1px solid #555; margin: 0 4px;"></div>
 
+    <!-- 🧹 新しく追加したスマート間引きボタン -->
+    <button class="header-btn optimize" onclick="optimizeAllLinesPoints()" title="長距離の直線や形を維持しつつ、マウスの微小なブレなどの細かい密集点だけを綺麗に間引きます">🧹 細かい点を間引き</button>
+
     <button id="track-btn" class="header-btn" onclick="toggleTracking()">🎥 追尾 OFF</button>
     <button id="audio-btn" class="header-btn" onclick="toggleAudio()">🔊 アナウンス OFF</button>
     <button class="header-btn capture" onclick="openCaptureModal()">📸 路線図出力</button>
 
     <div style="margin-left: auto; display: flex; gap: 6px;">
-      <button class="header-btn" onclick="exportJSON()" style="background:#28a745; font-weight:bold;">💾 JSON保存・共有</button>
+      <button class="header-btn" onclick="exportJSON()" style="background:#28a745; font-weight:bold;">💾 JSON保存</button>
       <button class="header-btn" onclick="importJSON('overwrite')" style="background:#d9534f;" title="上書き読込">📂 上書き読込</button>
       <button class="header-btn" onclick="importJSON('append')" style="background:#f0ad4e;" title="追加読込">📂 追加読込</button>
     </div>
@@ -251,9 +255,10 @@
   </div>
 
   <script>
-    // --- 座標自動軽量化・JSONファイル完全共有エディタ (v4.18) ---
+    // --- 路線図スマート間引きエディタ (v4.19) ---
 
-    // 距離ベースによる座標間引き処理（無駄な密集ポイントを削ってサイズをスマートに圧縮）
+    // 💡 詳細リクエストに対応した間引き関数：
+    // 「長距離の直線や形を形作る重要なポイントはそのまま残し、マウスのブレなどで近すぎる場所（5メートル未満の間隔で密集している細かい点）だけを綺麗に間引く」
     function simplifyPoints(points, minDistanceMeters = 5) {
       if (!points || points.length <= 2) return points;
       let simplified = [points[0]];
@@ -264,13 +269,35 @@
         let latlng = L.latLng(p.lat || p[0], p.lng || p[1]);
         let lastLatlng = L.latLng(lastPoint.lat || lastPoint[0], lastPoint.lng || lastPoint[1]);
         
+        // 5メートル以上離れた点（しっかり形が変わる部分）はキープし、近すぎる細かすぎる点はスキップ
         if (latlng.distanceTo(lastLatlng) >= minDistanceMeters) {
           simplified.push(p);
           lastPoint = p;
         }
       }
+      // 終点は必ずキープ
       simplified.push(points[points.length - 1]);
       return simplified;
+    }
+
+    // 🧹 ボタンを押したときに全路線の細かい点を一括で綺麗に間引く機能
+    function optimizeAllLinesPoints() {
+      if (lines.length === 0) {
+        alert('間引く路線がありません。');
+        return;
+      }
+
+      let totalBefore = 0;
+      let totalAfter = 0;
+
+      lines.forEach(l => {
+        totalBefore += l.points.length;
+        l.points = simplifyPoints(l.points, 5); // 5メートル間隔で細かい点をクリーンアップ
+        totalAfter += l.points.length;
+        updateLinePolylines(l); // マップ上の描画を更新
+      });
+
+      alert(`🧹 路線データの細かい点を整理しました！\n（総ポイント数: ${totalBefore}点 ➔ ${totalAfter}点 に軽量化されました）`);
     }
 
     const map = L.map('map', { dragging: true, preferCanvas: true }).setView([35.6812, 139.7671], 11);
@@ -334,10 +361,11 @@
       btn.classList.toggle('toggle-on', isAudioOn);
     }
 
-    // JSON出力（保存・共有用：自動間引きでサイズを大幅に軽量化）
+    // JSON出力（保存・共有用：自動で間引き処理を挟んでファイルサイズを極限までコンパクトに）
     function exportJSON() {
+      // 保存時に自動で細かい点を間引いてエラーを予防
       const optimizedLines = lines.map(l => {
-        let simplified = simplifyPoints(l.points, 5); // 5m間隔で最適化
+        let simplified = simplifyPoints(l.points, 5);
         return {
           ...l,
           points: simplified.map(p => [Number((p.lat || p[0]).toFixed(5)), Number((p.lng || p[1]).toFixed(5))])
@@ -364,7 +392,7 @@
       a.href = URL.createObjectURL(blob);
       a.download = `train_editor_data_${Date.now()}.json`;
       a.click();
-      alert('路線図データをJSONファイルとして軽量保存しました！Discordやギットハブなどで自由に共有できます。');
+      alert('路線図データをJSONファイルとして軽量保存しました！');
     }
 
     // JSON入力（読込用）
