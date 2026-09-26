@@ -3,11 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>電車内表示器エディタ v4.11 (LocalForage・圧縮対応版)</title>
+  <title>電車内表示器エディタ v4.12 (大容量分割保存対応版)</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-  <!-- LocalForage と LZ-String のCDN読み込み -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
   <style>
@@ -123,7 +122,6 @@
 
     <button class="header-btn plan" onclick="startPlanMode()">📐 新規計画線</button>
     <button class="header-btn success" id="finish-plan-btn" style="display:none; background:#20c997;" onclick="finishPlanLine()">📌 計画線・延長確定</button>
-    <button class="header-btn success" id="finish-eraser-btn" style="display:none; background:#e6194B;" onclick="finishEraserSelection()">✂️ 修正区間描画へ</button>
     <button class="header-btn success" id="finish-line-btn" style="display:none; background:#28a745;" onclick="finishCurrentLine()">✅ 路線確定</button>
     <button class="header-btn danger" onclick="discardCurrentDrawing()" title="破棄">🗑️ 破棄</button>
 
@@ -333,29 +331,44 @@
   </div>
 
   <script>
-    // --- LocalForage による大容量・高安定ストレージマネージャー ---
+    // --- 超大容量対応・チャンク分割保存マネージャー ---
     localforage.config({
-      name: 'TrainEditorApp',
-      storeName: 'online_works_v2'
+      name: 'TrainEditorApp_Chunks',
+      storeName: 'works_chunked'
     });
+
+    const CHUNK_SIZE = 400 * 1024; // 1つのパーツあたり約400KBに分割
 
     async function dbGetAllWorks() {
       try {
         let keys = await localforage.keys();
+        // メタデータキー（work_xxx）のみを抽出
+        let metaKeys = keys.filter(k => k.startsWith('meta_'));
         let works = [];
-        for (let key of keys) {
-          let val = await localforage.getItem(key);
-          if (val) {
-            // LZ-Stringで圧縮されている場合は復元
-            if (typeof val === 'string' && val.startsWith('LZCOMP:')) {
-              try {
-                let decompressed = LZString.decompressFromUTF16(val.substring(7));
-                works.push(JSON.parse(decompressed));
-              } catch (e) {
-                console.error('解凍エラー:', e);
-              }
-            } else {
-              works.push(val);
+
+        for (let mKey of metaKeys) {
+          let workId = mKey.substring(5);
+          let meta = await localforage.getItem(mKey);
+          if (!meta) continue;
+
+          // 分割されたチャンクをすべて集めて結合
+          let chunkCount = meta.chunks;
+          let compressedParts = [];
+          let success = true;
+
+          for (let i = 0; i < chunkCount; i++) {
+            let part = await localforage.getItem(`chunk_${workId}_${i}`);
+            if (part === null) { success = false; break; }
+            compressedParts.push(part);
+          }
+
+          if (success) {
+            try {
+              let fullCompressed = compressedParts.join('');
+              let decompressed = LZString.decompressFromUTF16(fullCompressed);
+              works.push(JSON.parse(decompressed));
+            } catch (e) {
+              console.error('復元エラー:', e);
             }
           }
         }
@@ -368,20 +381,48 @@
 
     async function dbSaveWork(workData) {
       try {
+        let workId = workData.id;
         let jsonStr = JSON.stringify(workData);
-        // 100MBクラスの大容量でも安全に保存できるよう、自動でLZ-String圧縮を適用
-        let compressed = 'LZCOMP:' + LZString.compressToUTF16(jsonStr);
-        await localforage.setItem(workData.id, compressed);
+        let compressed = LZString.compressToUTF16(jsonStr);
+
+        // 古い関連チャンクをあらかじめ掃除
+        await dbDeleteWork(workId);
+
+        // データを一定サイズ（CHUNK_SIZE）ごとに分割
+        let totalLen = compressed.length;
+        let chunksCount = Math.ceil(totalLen / CHUNK_SIZE);
+
+        for (let i = 0; i < chunksCount; i++) {
+          let chunkData = compressed.substring(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+          await localforage.setItem(`chunk_${workId}_${i}`, chunkData);
+        }
+
+        // メタデータを保存
+        await localforage.setItem(`meta_${workId}`, {
+          id: workId,
+          title: workData.title,
+          isAnonymous: workData.isAnonymous,
+          tags: workData.tags,
+          likes: workData.likes,
+          timestamp: workData.timestamp,
+          expiresAt: workData.expiresAt,
+          chunks: chunksCount
+        });
+
         return true;
       } catch (e) {
-        console.error('保存失敗:', e);
+        console.error('分割保存失敗:', e);
         throw e;
       }
     }
 
     async function dbDeleteWork(workId) {
       try {
-        await localforage.removeItem(workId);
+        let keys = await localforage.keys();
+        let targetKeys = keys.filter(k => k === `meta_${workId}` || k.startsWith(`chunk_${workId}_`));
+        for (let k of targetKeys) {
+          await localforage.removeItem(k);
+        }
       } catch (e) {
         console.error('削除失敗:', e);
       }
@@ -411,7 +452,6 @@
     let currentPolyline = null;
     let isDrawing = false;
 
-    let eraserState = { active: false, lineId: null, erasedIndices: new Set(), eraserPolyline: null, startPt: null, endPt: null };
     let activePlanState = { active: false, targetLineId: null, rawPoints: [], currentIndex: 0, ghostPolyline: null, solidPolyline: null, isLocked: false };
 
     let stations = [];
@@ -515,7 +555,7 @@
         closeShareModal();
         alert(isAnonymous ? '名無しの作品集として1時間限定で共有しました！' : `「${title}」をオンライン共有しました！`);
       } catch (e) {
-        alert('エラー: 大容量データの保存に失敗しました。');
+        alert('エラー: 大容量データの分割保存に失敗しました。');
       }
     }
 
@@ -1025,31 +1065,12 @@
 
     function finishCurrentLine() {
       if (currentDrawingPoints.length < 2) return alert('路線を描画してください');
-      if (eraserState.active && currentMode === 'eraser-draw') {
-        let lineObj = lines.find(l => l.id === eraserState.lineId);
-        if (lineObj) {
-          let sortedIndices = Array.from(eraserState.erasedIndices).sort((a, b) => a - b);
-          let head = lineObj.points.slice(0, sortedIndices[0]);
-          let tail = lineObj.points.slice(sortedIndices[sortedIndices.length - 1] + 1);
-          lineObj.points = head.concat(currentDrawingPoints, tail);
-          updateLinePolylines(lineObj);
-        }
-        discardCurrentDrawing();
-        renderLineList();
-        alert('区間修正を保存しました！');
-        return;
-      }
       discardCurrentDrawing();
     }
 
     function discardCurrentDrawing() {
       if (currentPolyline) { map.removeLayer(currentPolyline); currentPolyline = null; }
-      if (eraserState.eraserPolyline) { map.removeLayer(eraserState.eraserPolyline); eraserState.eraserPolyline = null; }
       currentDrawingPoints = [];
-      eraserState.active = false; eraserState.lineId = null; eraserState.erasedIndices.clear();
-      document.getElementById('finish-eraser-btn').style.display = 'none';
-      document.getElementById('finish-line-btn').style.display = 'none';
-
       if (activePlanState.active) {
         if (activePlanState.ghostPolyline) map.removeLayer(activePlanState.ghostPolyline);
         if (activePlanState.solidPolyline) map.removeLayer(activePlanState.solidPolyline);
