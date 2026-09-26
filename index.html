@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>電車内表示器エディタ v4.12 (大容量分割保存対応版)</title>
+  <title>電車内表示器エディタ v4.14 (オンライン共有大容量対応版)</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -331,18 +331,17 @@
   </div>
 
   <script>
-    // --- 超大容量対応・チャンク分割保存マネージャー ---
+    // --- オンライン共有・大容量チャンク分割保存マネージャー ---
     localforage.config({
-      name: 'TrainEditorApp_Chunks',
-      storeName: 'works_chunked'
+      name: 'TrainEditorApp_Chunks_Share',
+      storeName: 'works_chunked_share'
     });
 
-    const CHUNK_SIZE = 400 * 1024; // 1つのパーツあたり約400KBに分割
+    const CHUNK_SIZE = 300 * 1024; // 1つのパーツあたり約300KBに安全分割
 
     async function dbGetAllWorks() {
       try {
         let keys = await localforage.keys();
-        // メタデータキー（work_xxx）のみを抽出
         let metaKeys = keys.filter(k => k.startsWith('meta_'));
         let works = [];
 
@@ -351,7 +350,6 @@
           let meta = await localforage.getItem(mKey);
           if (!meta) continue;
 
-          // 分割されたチャンクをすべて集めて結合
           let chunkCount = meta.chunks;
           let compressedParts = [];
           let success = true;
@@ -385,10 +383,9 @@
         let jsonStr = JSON.stringify(workData);
         let compressed = LZString.compressToUTF16(jsonStr);
 
-        // 古い関連チャンクをあらかじめ掃除
+        // 古い関連チャンクを綺麗に掃除
         await dbDeleteWork(workId);
 
-        // データを一定サイズ（CHUNK_SIZE）ごとに分割
         let totalLen = compressed.length;
         let chunksCount = Math.ceil(totalLen / CHUNK_SIZE);
 
@@ -397,7 +394,6 @@
           await localforage.setItem(`chunk_${workId}_${i}`, chunkData);
         }
 
-        // メタデータを保存
         await localforage.setItem(`meta_${workId}`, {
           id: workId,
           title: workData.title,
@@ -411,7 +407,7 @@
 
         return true;
       } catch (e) {
-        console.error('分割保存失敗:', e);
+        console.error('オンライン共有の分割保存失敗:', e);
         throw e;
       }
     }
@@ -450,8 +446,6 @@
 
     let currentDrawingPoints = [];
     let currentPolyline = null;
-    let isDrawing = false;
-
     let activePlanState = { active: false, targetLineId: null, rawPoints: [], currentIndex: 0, ghostPolyline: null, solidPolyline: null, isLocked: false };
 
     let stations = [];
@@ -555,7 +549,7 @@
         closeShareModal();
         alert(isAnonymous ? '名無しの作品集として1時間限定で共有しました！' : `「${title}」をオンライン共有しました！`);
       } catch (e) {
-        alert('エラー: 大容量データの分割保存に失敗しました。');
+        alert('エラー: 大容量データのオンライン共有保存に失敗しました。');
       }
     }
 
