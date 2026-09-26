@@ -1,0 +1,1324 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>電車内表示器エディタ v4.6 (オンライン検索・5x3グリッド完全版)</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: sans-serif; height: 100vh; display: flex; flex-direction: column; background: #1a1a1a; color: #fff; overflow: hidden; }
+    
+    header { background: #2a2a2a; padding: 6px 12px; display: flex; gap: 8px; align-items: center; border-bottom: 2px solid #444; z-index: 1000; flex-wrap: nowrap; min-height: 44px; }
+    
+    .header-group { display: flex; align-items: center; gap: 6px; }
+    
+    .mode-select {
+      background: #333; color: #fff; border: 1px solid #007acc; padding: 5px 8px; border-radius: 4px; font-size: 13px; font-weight: bold; cursor: pointer; outline: none; min-width: 150px;
+    }
+    .mode-select:focus { border-color: #0098ff; }
+
+    .header-btn {
+      background: #333; color: #fff; border: 1px solid #555; padding: 5px 10px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 4px; font-size: 12px; white-space: nowrap; margin: 0; width: auto;
+    }
+    .header-btn:hover { background: #444; }
+    .header-btn.success { background: #28a745; border-color: #34ce57; font-weight: bold; }
+    .header-btn.toggle-on { background: #ff9900; border-color: #ffaa00; font-weight: bold; color: #000; }
+    .header-btn.capture { background: #911eb4; border-color: #b152d2; font-weight: bold; }
+    .header-btn.plan { background: #17a2b8; border-color: #20c997; font-weight: bold; }
+    .header-btn.danger { background: #d9534f; border-color: #c9302c; font-weight: bold; }
+    .header-btn.online-share { background: #20c997; color: #000; font-weight: bold; }
+    .header-btn.online-browse { background: #ffc107; color: #000; font-weight: bold; }
+
+    .key-guide-box {
+      background: #1e1e1e; border: 1px solid #00aaff; border-radius: 4px; padding: 4px 10px; font-size: 11px; color: #00ffcc; display: flex; align-items: center; gap: 6px; white-space: nowrap;
+    }
+
+    #main-container { flex: 1; display: flex; position: relative; overflow: hidden; }
+    #map { flex: 1; height: 100%; background: #222; }
+
+    #sidebar { width: 430px; background: #222; border-left: 2px solid #444; display: flex; flex-direction: column; gap: 10px; padding: 10px; overflow-y: auto; z-index: 1000; }
+    .panel { background: #2a2a2a; border: 1px solid #444; border-radius: 6px; padding: 10px; }
+    .panel h3 { font-size: 14px; margin-bottom: 8px; color: #00aaff; border-bottom: 1px solid #444; padding-bottom: 4px; display: flex; justify-content: space-between; align-items: center; }
+
+    #display-preview { background: #000; border: 4px solid #333; border-radius: 8px; padding: 10px; text-align: center; }
+    .led-board { background: #111; border: 1px solid #222; padding: 10px; display: flex; justify-content: flex-start; align-items: center; min-height: 80px; overflow-x: auto; }
+    .led-grid { display: flex; gap: 2px; justify-content: flex-start; background: #050505; padding: 6px; border-radius: 4px; }
+    .char-matrix { display: grid; grid-template-columns: repeat(16, 3px); grid-template-rows: repeat(16, 3px); gap: 1px; flex-shrink: 0; }
+    .pixel { width: 3px; height: 3px; background: #222; border-radius: 50%; }
+    .pixel.on { background: #00ff66; box-shadow: 0 0 2px #00ff66; }
+
+    select, input, button { background: #333; color: #fff; border: 1px solid #555; padding: 6px; border-radius: 4px; width: 100%; margin-bottom: 5px; }
+    button { cursor: pointer; background: #007acc; border: none; font-weight: bold; }
+    button:hover { background: #0098ff; }
+    
+    .station-marker {
+      width: 14px; height: 14px; border-radius: 50%; background: #007acc; border: 2px solid #fff; box-shadow: 0 0 4px rgba(0,0,0,0.5); cursor: pointer;
+    }
+    .station-marker.limited { background: #ff6600; border-color: #ffff00; box-shadow: 0 0 6px #ff6600; }
+
+    .timetable-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 5px; }
+    .timetable-table th, .timetable-table td { border: 1px solid #444; padding: 4px; text-align: center; }
+    .timetable-table th { background: #333; color: #00aaff; }
+
+    .folder-item { background: #333; border: 1px dashed #666; border-radius: 4px; padding: 6px; margin-bottom: 6px; }
+    .folder-header { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+    .folder-color-input { width: 24px !important; height: 24px !important; padding: 0 !important; margin: 0 !important; cursor: pointer; border: none; }
+    .line-item, .plan-item, .express-item { display: flex; align-items: center; gap: 5px; margin-bottom: 4px; background: #1e1e1e; padding: 4px; border-radius: 4px; flex-wrap: wrap; }
+    .line-item.in-folder { margin-left: 14px; border-left: 3px solid #555; }
+    .line-color-badge { width: 12px; height: 12px; border-radius: 30%; display: inline-block; flex-shrink: 0; }
+
+    .train-tab { background: #333; border: 1px solid #555; padding: 4px 8px; font-size: 11px; cursor: pointer; border-radius: 4px 4px 0 0; }
+    .train-tab.active { background: #007acc; font-weight: bold; }
+
+    /* 全画面を覆うモーダルGUI */
+    .modal-overlay {
+      display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.9); z-index: 3000; justify-content: center; align-items: center; padding: 30px;
+    }
+    .modal-content-fullscreen {
+      background: #222; border: 2px solid #555; border-radius: 8px; padding: 20px; width: 95vw; height: 92vh; display: flex; flex-direction: column; gap: 12px; overflow: hidden;
+    }
+    .modal-content-normal {
+      background: #222; border: 2px solid #555; border-radius: 8px; padding: 20px; width: 90vw; max-width: 600px; display: flex; flex-direction: column; gap: 12px;
+    }
+
+    /* 5x3 グリッドレイアウト (1ページあたり最大15件) */
+    .works-grid-container {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      grid-template-rows: repeat(3, 1fr);
+      gap: 12px;
+      flex: 1;
+      overflow-y: auto;
+      padding: 4px;
+    }
+    .work-card {
+      background: #2a2a2a; border: 1px solid #444; border-radius: 6px; padding: 10px; display: flex; flex-direction: column; justify-content: space-between; gap: 6px; font-size: 11px;
+    }
+    .work-card-header { display: flex; justify-content: space-between; align-items: center; }
+    .tag-badge { background: #17a2b8; color: #fff; padding: 2px 4px; border-radius: 3px; font-size: 9px; display: inline-block; margin-right: 2px; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="header-group">
+      <span style="font-size: 12px; color: #aaa;">モード:</span>
+      <select id="mode-select" class="mode-select" onchange="setMode(this.value)">
+        <option value="pan">✋ 地図移動</option>
+        <option value="plan">📐 計画線・延長モード</option>
+        <option value="station">🚉 駅配置</option>
+        <option value="transfer">🔄 乗換統合</option>
+        <option value="start">🟢 始点設定</option>
+        <option value="via">🟨 経由地設定</option>
+        <option value="end">🔴 終点設定</option>
+        <option value="express-config">⚡ 速達種別停車駅設定</option>
+      </select>
+    </div>
+
+    <button class="header-btn plan" onclick="startPlanMode()">📐 新規計画線</button>
+    <button class="header-btn success" id="finish-plan-btn" style="display:none; background:#20c997;" onclick="finishPlanLine()">📌 計画線・延長確定</button>
+    <button class="header-btn success" id="finish-eraser-btn" style="display:none; background:#e6194B;" onclick="finishEraserSelection()">✂️ 修正区間描画へ</button>
+    <button class="header-btn success" id="finish-line-btn" style="display:none; background:#28a745;" onclick="finishCurrentLine()">✅ 路線確定</button>
+    <button class="header-btn danger" onclick="discardCurrentDrawing()" title="破棄">🗑️ 破棄</button>
+
+    <div style="height: 16px; border-left: 1px solid #555; margin: 0 4px;"></div>
+
+    <button id="track-btn" class="header-btn" onclick="toggleTracking()">🎥 追尾 OFF</button>
+    <button id="audio-btn" class="header-btn" onclick="toggleAudio()">🔊 アナウンス OFF</button>
+    <button class="header-btn capture" onclick="openCaptureModal()">📸 路線図出力</button>
+
+    <div style="margin-left: auto; display: flex; gap: 6px;">
+      <button class="header-btn online-share" onclick="openShareModal()">🌐 共有</button>
+      <button class="header-btn online-browse" onclick="openBrowseModal()">📖 閲覧</button>
+      <button class="header-btn" onclick="exportJSON()">💾 保存</button>
+      <button class="header-btn" onclick="importJSON('overwrite')" style="background:#d9534f;" title="上書き読込">📂 上書き読込</button>
+      <button class="header-btn" onclick="importJSON('append')" style="background:#f0ad4e;" title="追加読込">📂 追加読込</button>
+    </div>
+  </header>
+
+  <div id="main-container">
+    <div id="map"></div>
+
+    <div id="sidebar">
+      <div class="panel">
+        <h3>
+          ⚡ 速達種別管理 (各停は固定・削除不可)
+          <button onclick="addNewExpressType()" style="width:auto; padding:2px 6px; font-size:11px;">➕ 種別追加</button>
+        </h3>
+        <div id="express-list-container" style="max-height: 130px; overflow-y: auto;">
+          <p style="font-size: 11px; color:#888;">速達種別がありません</p>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>
+          🛤 路線・支線・フォルダ管理
+          <button onclick="addNewFolder()" style="width:auto; padding:2px 6px; font-size:11px;">➕ フォルダ追加</button>
+        </h3>
+        <div id="line-list-container" style="max-height: 130px; overflow-y: auto;">
+          <p style="font-size: 11px; color:#888;">路線またはフォルダが存在しません</p>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>
+          📐 計画線管理
+          <button onclick="startPlanMode()" style="width:auto; padding:2px 6px; font-size:11px; background:#17a2b8;">➕ 計画線追加</button>
+        </h3>
+        <div id="plan-list-container" style="max-height: 100px; overflow-y: auto;">
+          <p style="font-size: 11px; color:#888;">固定された計画線はありません</p>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>
+          🚃 列車・運行管理 
+          <button onclick="addNewTrain()" style="width:auto; padding:2px 6px; font-size:11px;">➕ 列車追加</button>
+        </h3>
+        <div id="train-tabs-container" style="display:flex; gap:2px; margin-bottom:8px; overflow-x:auto;"></div>
+
+        <div id="train-editor-content">
+          <p>選択中列車: <b id="active-train-title" style="color:#00aaff">列車 1</b></p>
+          <p>始点: <span id="start-name" style="color:#00ff66">未設定</span></p>
+          <p>経由: <span id="via-names" style="color:#ffcc00">なし</span> <button onclick="clearViaStations()" style="width:auto; padding:2px 5px; font-size:10px;">クリア</button></p>
+          <p>終点: <span id="end-name" style="color:#ff4444">未設定</span></p>
+          
+          <div style="margin-top: 5px;">
+            <label style="font-size: 11px;">速達種別名 (完全一致):</label>
+            <input type="text" id="train-express-name" value="各駅停車" placeholder="例: 特急、各駅停車" onchange="updateActiveTrainConfig()">
+          </div>
+
+          <div style="display:flex; gap:5px; margin-top:5px;">
+            <div style="flex:1;">
+              <label style="font-size: 11px;">最高速度 (km/h):</label>
+              <input type="number" id="train-speed" value="60" min="10" max="300" onchange="updateActiveTrainConfig()">
+            </div>
+            <div style="flex:1;">
+              <label style="font-size: 11px;">標準停車時間 (秒):</label>
+              <input type="number" id="stop-time" value="3" min="0" max="60" onchange="updateActiveTrainConfig()">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>📅 ダイヤ（時刻表）</h3>
+        <div style="display:flex; gap:5px;">
+          <div style="flex:1;">
+            <label style="font-size:11px;">始点発車時刻:</label>
+            <input type="time" id="timetable-start-time" value="08:00">
+          </div>
+          <div style="flex:1;">
+            <label style="font-size:11px;">駅間走行 (秒):</label>
+            <input type="number" id="default-travel-sec" value="60" min="10">
+          </div>
+        </div>
+        <button onclick="generateTimetableForActiveTrain()" style="background:#17a2b8;">🔄 この列車のダイヤ生成</button>
+        
+        <div style="max-height: 100px; overflow-y: auto; margin-top: 5px;">
+          <table class="timetable-table">
+            <thead>
+              <tr>
+                <th>駅名</th>
+                <th>着時刻</th>
+                <th>発時刻</th>
+              </tr>
+            </thead>
+            <tbody id="timetable-body">
+              <tr><td colspan="3" style="color:#888;">ダイヤ未作成</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>📺 車内表示器 (選択列車の案内)</h3>
+        <div id="display-preview">
+          <div class="led-board">
+            <div id="display-text" class="led-grid"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 共有モーダル (通常サイズ) -->
+  <div id="share-modal" class="modal-overlay">
+    <div class="modal-content-normal">
+      <h3 style="color: #20c997;">🌐 作品をオンライン共有</h3>
+      <p style="font-size: 12px; color: #ccc;">作品に名前を付けて全体公開するか、名前なし（名無しの作品集・1時間限定）で共有するか選択できます。</p>
+      <div>
+        <label style="font-size: 11px;">作品名 (空欄の場合は「名無しの作品集」):</label>
+        <input type="text" id="share-work-name" placeholder="例: 東京近郊高速鉄道網">
+      </div>
+      <div>
+        <label style="font-size: 11px;">通る市町村のタグ (カンマ区切り):</label>
+        <input type="text" id="share-work-tags" placeholder="例: 八王子市, 多摩市, 町田市">
+      </div>
+      <div style="display: flex; gap: 10px; margin-top: 10px;">
+        <button onclick="executeShare()" style="flex:1; background:#28a745;">🚀 共有する</button>
+        <button onclick="closeShareModal()" style="flex:1; background:#6c757d;">キャンセル</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 閲覧モーダル (全画面・5x3グリッド対応) -->
+  <div id="browse-modal" class="modal-overlay">
+    <div class="modal-content-fullscreen">
+      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #444; padding-bottom: 8px;">
+        <h3 style="color: #ffc107;">📖 オンライン作品閲覧・検索 (いいね数順)</h3>
+        <button onclick="closeBrowseModal()" style="width: auto; padding: 4px 14px; background:#6c757d; font-size:12px;">✖ 閉じる</button>
+      </div>
+      
+      <!-- 検索・フィルターツールバー -->
+      <div style="display: flex; gap: 10px; background: #1e1e1e; padding: 8px; border-radius: 4px; align-items: center;">
+        <div style="flex:1;">
+          <input type="text" id="search-name-input" placeholder="🔍 作品名で検索..." oninput="renderBrowseWorks()" style="margin:0; font-size:12px;">
+        </div>
+        <div style="flex:1;">
+          <input type="text" id="search-tag-input" placeholder="🏷️ タグ (市町村名) で検索..." oninput="renderBrowseWorks()" style="margin:0; font-size:12px;">
+        </div>
+      </div>
+
+      <p style="font-size: 11px; color: #aaa;">作品に「いいね」をすると、マップアイコンから「上書き読み込み」または「追加読み込み」を選択できるようになります。（1人1作品につき1いいね）</p>
+      
+      <!-- 5x3 グリッドコンテナ -->
+      <div id="browse-works-container" class="works-grid-container">
+        <!-- カードがここに動的生成されます -->
+      </div>
+    </div>
+  </div>
+
+  <!-- プレビューモーダル -->
+  <div id="preview-modal" class="modal-overlay">
+    <div class="modal-content-normal" style="max-width: 900px; height: 80vh;">
+      <h3 id="preview-title" style="color: #00aaff;">👁️ 作品プレビュー</h3>
+      <div id="preview-map-container" style="flex: 1; background: #111; border-radius: 6px; overflow: hidden; position: relative;">
+        <div style="display:flex; justify-content:center; align-items:center; height:100%; color:#888;">プレビュー読み込み中...</div>
+      </div>
+      <div style="display: flex; justify-content: flex-end; margin-top: 10px;">
+        <button onclick="closePreviewModal()" style="width: auto; padding: 6px 20px; background:#6c757d;">閉じる</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 画像出力モーダル -->
+  <div id="capture-modal" class="modal-overlay">
+    <div class="modal-content-normal" style="max-width: 800px; height: 85vh;">
+      <h3 style="margin-bottom: 10px; color: #00aaff;">🗺️ 路線図出力プレビュー</h3>
+      <div class="tab-btn-group" style="display:flex; gap:5px; margin-bottom:10px;">
+        <button id="tab-deformed-btn" class="active" onclick="switchCaptureTab('deformed')" style="flex:1; padding:8px;">📐 簡略路線図 (デフォルメ)</button>
+        <button id="tab-real-btn" onclick="switchCaptureTab('real')" style="flex:1; padding:8px;">🗺️ 実地図そのまま</button>
+      </div>
+      <div class="zoom-toolbar" style="display:flex; gap:6px; align-items:center; margin-bottom:8px; background:#1e1e1e; padding:4px 8px; border-radius:4px;">
+        <span style="font-size:12px; color:#aaa;">ズーム:</span>
+        <button onclick="zoomPreview(0.2)" style="width:auto; padding:4px 10px;">🔍 (+)</button>
+        <button onclick="zoomPreview(-0.2)" style="width:auto; padding:4px 10px;">🔍 (-)</button>
+        <button onclick="resetZoomPreview()" style="width:auto; padding:4px 10px;">🔄 リセット</button>
+        <span id="zoom-level-label" style="font-size:11px; color:#00aaff; margin-left:6px;">100%</span>
+      </div>
+      <div id="captured-container" style="flex:1; background:#111; border:1px solid #444; border-radius:4px; overflow:hidden; position:relative; display:flex; justify-content:center; align-items:center;">
+        <div id="zoom-wrapper" style="transform-origin: center center; display:flex; justify-content:center; align-items:center;">
+          <canvas id="deformed-canvas"></canvas>
+          <img id="captured-image" src="" alt="Route Map" style="display:none;">
+        </div>
+      </div>
+      <div style="display: flex; gap: 10px; margin-top: 15px;">
+        <button onclick="downloadCurrentCapture()" style="flex:1; background: #28a745;">💾 ダウンロード (PNG)</button>
+        <button onclick="closeCaptureModal()" style="flex:1; background: #6c757d;">閉じる</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const map = L.map('map', { dragging: true, preferCanvas: true }).setView([35.6812, 139.7671], 11);
+
+    L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png', {
+      attribution: '&copy; <a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank">国土地理院</a>',
+      maxZoom: 18,
+      crossOrigin: true
+    }).addTo(map);
+
+    let currentMode = 'pan';
+    let lines = [];
+    let folders = [];
+    let plannedLines = [];
+    
+    let expressTypes = [
+      { id: 'express_local_fixed', name: '各駅停車', color: '#007acc', isFixed: true }
+    ];
+    let expressStops = {}; 
+    
+    let onlineWorks = JSON.parse(localStorage.getItem('transit_online_works') || '[]');
+    let userLikedWorks = JSON.parse(localStorage.getItem('transit_user_likes') || '{}');
+
+    let currentDrawingPoints = [];
+    let currentPolyline = null;
+    let isDrawing = false;
+    let autoScrollInterval = null;
+
+    let eraserState = { active: false, lineId: null, erasedIndices: new Set(), eraserPolyline: null, startPt: null, endPt: null };
+    let activePlanState = { active: false, targetLineId: null, rawPoints: [], currentIndex: 0, ghostPolyline: null, solidPolyline: null, isLocked: false };
+
+    let stations = [];
+    let transfers = [];
+    let selectedTransferStation = null;
+    let fontData = {};
+    let isTracking = false;
+    let isAudioOn = false;
+    let trainList = [];
+    let activeTrainId = null;
+    let currentCaptureMode = 'deformed';
+    let currentZoomScale = 1.0, panX = 0, panY = 0, isPanning = false, startPanX = 0, startPanY = 0;
+
+    const lineColors = ['#007acc', '#e6194B', '#3cb44b', '#ffe119', '#911eb4', '#f58231'];
+
+    function updateKeyGuide(mode) {
+      const box = document.getElementById('key-guide-box');
+      let guideText = "";
+      switch (mode) {
+        case 'pan': guideText = "💡 【地図移動】マウスドラッグで地図を自由に移動できます。"; break;
+        case 'plan': guideText = "💡 【計画線・延長モード】ドラッグで点設置 ｜ [Shift]キー: ロック切替"; break;
+        case 'express-config': guideText = "⚡ 【速達種別停車駅設定】サイドバーで種別を選択し、マップ上の駅をクリックして停車/通過を切替！"; break;
+        case 'station': guideText = "💡 【駅配置】クリックで駅配置"; break;
+        case 'transfer': guideText = "💡 【乗換統合】2つの駅を順にクリックして結ぶ。"; break;
+        default: guideText = "💡 モードに応じた操作を行います。"; break;
+      }
+      box.innerHTML = `<span>${guideText}</span>`;
+    }
+
+    function toggleTracking() {
+      isTracking = !isTracking;
+      const btn = document.getElementById('track-btn');
+      btn.innerText = isTracking ? '🎥 追尾 ON' : '🎥 追尾 OFF';
+      btn.classList.toggle('toggle-on', isTracking);
+    }
+
+    function toggleAudio() {
+      isAudioOn = !isAudioOn;
+      const btn = document.getElementById('audio-btn');
+      btn.innerText = isAudioOn ? '🔊 アナウンス ON' : '🔊 アナウンス OFF';
+      btn.classList.toggle('toggle-on', isAudioOn);
+    }
+
+    function openShareModal() {
+      document.getElementById('share-modal').style.display = 'flex';
+      document.getElementById('share-work-name').value = '';
+      document.getElementById('share-work-tags').value = '';
+    }
+    function closeShareModal() { document.getElementById('share-modal').style.display = 'none'; }
+
+    function executeShare() {
+      let titleInput = document.getElementById('share-work-name').value.trim();
+      let tagsInput = document.getElementById('share-work-tags').value.trim();
+      
+      let isAnonymous = !titleInput;
+      let title = isAnonymous ? '名無しの作品集' : titleInput;
+      let tags = tagsInput ? tagsInput.split(',').map(t => t.trim()).filter(Boolean) : [];
+
+      let workData = {
+        id: 'work_' + Date.now(),
+        title: title,
+        isAnonymous: isAnonymous,
+        tags: tags,
+        likes: 0,
+        timestamp: Date.now(),
+        expiresAt: isAnonymous ? Date.now() + 3600 * 1000 : null,
+        payload: {
+          folders,
+          lines: lines.map(l => ({ ...l, points: l.points.map(p => [p.lat, p.lng]) })),
+          stations: stations.map(s => ({ id: s.id, name: s.name, latlng: [s.latlng.lat, s.latlng.lng] })),
+          expressTypes,
+          expressStops
+        }
+      };
+
+      onlineWorks = onlineWorks.filter(w => !w.expiresAt || w.expiresAt > Date.now());
+      onlineWorks.push(workData);
+      localStorage.setItem('transit_online_works', JSON.stringify(onlineWorks));
+
+      closeShareModal();
+      alert(isAnonymous ? '名無しの作品集として1時間限定で共有しました！' : `「${title}」をオンライン共有しました！`);
+    }
+
+    function openBrowseModal() {
+      document.getElementById('search-name-input').value = '';
+      document.getElementById('search-tag-input').value = '';
+      renderBrowseWorks();
+      document.getElementById('browse-modal').style.display = 'flex';
+    }
+
+    function closeBrowseModal() { document.getElementById('browse-modal').style.display = 'none'; }
+
+    function renderBrowseWorks() {
+      let now = Date.now();
+      onlineWorks = onlineWorks.filter(w => !w.expiresAt || w.expiresAt > now);
+      localStorage.setItem('transit_online_works', JSON.stringify(onlineWorks));
+
+      let nameQuery = document.getElementById('search-name-input').value.trim().toLowerCase();
+      let tagQuery = document.getElementById('search-tag-input').value.trim().toLowerCase();
+
+      // フィルター適用
+      let filtered = onlineWorks.filter(w => {
+        let matchName = w.title.toLowerCase().includes(nameQuery);
+        let matchTag = tagQuery === '' || w.tags.some(t => t.toLowerCase().includes(tagQuery));
+        return matchName && matchTag;
+      });
+
+      // いいね数順にソートして最大15件 (5x3) 表示
+      let sortedWorks = filtered.sort((a, b) => b.likes - a.likes).slice(0, 15);
+
+      let container = document.getElementById('browse-works-container');
+      container.innerHTML = '';
+
+      if (sortedWorks.length === 0) {
+        container.innerHTML = '<p style="font-size: 12px; color: #888; text-align: center; grid-column: span 5; padding: 40px;">該当する作品が見つかりません。</p>';
+        return;
+      }
+
+      sortedWorks.forEach(w => {
+        let isLiked = !!userLikedWorks[w.id];
+        let card = document.createElement('div');
+        card.className = 'work-card';
+        
+        let tagsHtml = w.tags.map(tag => `<span class="tag-badge">#${tag}</span>`).join('');
+        let timeRemaining = w.expiresAt ? `<span style="font-size:9px; color:#ffcc00;">(${Math.ceil((w.expiresAt - now)/60000)}分で消去)</span>` : '';
+
+        card.innerHTML = `
+          <div>
+            <div class="work-card-header">
+              <b style="font-size: 12px; color: #00ffcc; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:110px;" title="${w.title}">${w.title}</b>
+              <span style="font-size: 10px; color: #aaa;">❤️ ${w.likes}</span>
+            </div>
+            <div style="margin:2px 0; height:24px; overflow:hidden;">${tagsHtml || '<span style="font-size:9px; color:#666;">タグなし</span>'}</div>
+            <div style="font-size:9px; color:#888;">${timeRemaining}</div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 3px; margin-top: 4px;">
+            <button onclick="toggleLikeWork('${w.id}')" style="font-size:9px; padding:2px 4px; background:${isLiked ? '#d9534f' : '#333'}; border:1px solid #777;">
+              ${isLiked ? '❤️ 解除' : '🤍 いいね'}
+            </button>
+            <button onclick="previewWork('${w.id}')" style="font-size:9px; padding:2px 4px; background:#17a2b8;">👁️ プレビュー</button>
+            <button onclick="loadWorkToEditor('${w.id}', 'overwrite')" style="font-size:9px; padding:2px 4px; background:${isLiked ? '#d9534f' : '#555'}; ${isLiked ? '' : 'opacity:0.6;'}" title="上書き読込">
+              📂 上書き読込
+            </button>
+            <button onclick="loadWorkToEditor('${w.id}', 'append')" style="font-size:9px; padding:2px 4px; background:${isLiked ? '#f0ad4e' : '#555'}; ${isLiked ? '' : 'opacity:0.6;'}" title="追加読込">
+              📂 追加読込
+            </button>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    function toggleLikeWork(workId) {
+      let work = onlineWorks.find(w => w.id === workId);
+      if (!work) return;
+
+      if (userLikedWorks[workId]) {
+        userLikedWorks[workId] = false;
+        work.likes = Math.max(0, work.likes - 1);
+      } else {
+        userLikedWorks[workId] = true;
+        work.likes += 1;
+      }
+
+      localStorage.setItem('transit_online_works', JSON.stringify(onlineWorks));
+      localStorage.setItem('transit_user_likes', JSON.stringify(userLikedWorks));
+      renderBrowseWorks();
+    }
+
+    function previewWork(workId) {
+      let work = onlineWorks.find(w => w.id === workId);
+      if (!work) return;
+      document.getElementById('preview-title').innerText = `👁️ プレビュー: ${work.title}`;
+      document.getElementById('preview-modal').style.display = 'flex';
+      
+      let container = document.getElementById('preview-map-container');
+      container.innerHTML = `<div id="sub-map" style="width:100%; height:100%;"></div>`;
+      
+      setTimeout(() => {
+        let subMap = L.map('sub-map').setView([35.6812, 139.7671], 11);
+        L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(subMap);
+        
+        if (work.payload.stations) {
+          work.payload.stations.forEach(s => {
+            L.marker(s.latlng).addTo(subMap).bindTooltip(s.name, { permanent: true });
+          });
+        }
+        if (work.payload.lines) {
+          work.payload.lines.forEach(l => {
+            L.polyline(l.points, { color: l.color, weight: 4 }).addTo(subMap);
+          });
+        }
+      }, 200);
+    }
+
+    function closePreviewModal() { document.getElementById('preview-modal').style.display = 'none'; }
+
+    function loadWorkToEditor(workId, mode) {
+      let work = onlineWorks.find(w => w.id === workId);
+      if (!work) return;
+      if (!userLikedWorks[workId]) {
+        alert('この作品を利用するには、まず「いいね」を押してください！');
+        return;
+      }
+
+      if (mode === 'overwrite') {
+        lines.forEach(l => { if (l.polyline) map.removeLayer(l.polyline); if (l.borderPolyline) map.removeLayer(l.borderPolyline); });
+        stations.forEach(s => map.removeLayer(s.marker));
+        folders = []; lines = []; stations = []; trainList = []; 
+        expressTypes = [{ id: 'express_local_fixed', name: '各駅停車', color: '#007acc', isFixed: true }]; 
+        expressStops = {};
+      }
+
+      let data = work.payload;
+      if (data.expressTypes) {
+        data.expressTypes.forEach(et => {
+          if (!expressTypes.some(x => x.name === et.name)) expressTypes.push(et);
+        });
+      }
+      if (data.expressStops) {
+        for (let k in data.expressStops) {
+          if (!expressStops[k]) expressStops[k] = {};
+          Object.assign(expressStops[k], data.expressStops[k]);
+        }
+      }
+      if (data.folders) {
+        data.folders.forEach(f => {
+          if (!folders.some(x => x.id === f.id)) folders.push(f);
+        });
+      }
+      if (data.lines) {
+        data.lines.forEach(l => {
+          l.points = l.points.map(p => L.latLng(p[0], p[1]));
+          lines.push(l);
+          updateLinePolylines(l);
+        });
+      }
+      if (data.stations) {
+        data.stations.forEach(s => {
+          const latlng = Array.isArray(s.latlng) ? L.latLng(s.latlng[0], s.latlng[1]) : s.latlng;
+          const marker = L.marker(latlng, { icon: createStationMarkerIcon('各駅停車'), draggable: true }).addTo(map);
+          marker.bindTooltip(s.name, { permanent: true, direction: 'top' });
+          let newSt = { id: Date.now() + Math.random(), name: s.name, marker, latlng: marker.getLatLng() };
+          stations.push(newSt);
+          marker.on('click', (evt) => handleStationClick(evt, newSt));
+        });
+      }
+
+      sortExpressTypes();
+      renderLineList();
+      if (trainList.length === 0) addNewTrain();
+      closeBrowseModal();
+      alert(`作品「${work.title}」を${mode === 'overwrite' ? '上書き' : '追加'}読み込みしました！`);
+    }
+
+    // --- 通常のファイル読込・保存 ---
+    function exportJSON() {
+      const data = { folders, lines: lines.map(l => ({ ...l, points: l.points.map(p => [p.lat, p.lng]) })), stations: stations.map(s => ({ id: s.id, name: s.name, latlng: [s.latlng.lat, s.latlng.lng] })), expressTypes, expressStops, fontData };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'train_editor_data.json'; a.click();
+    }
+
+    function importJSON(mode) {
+      const input = document.createElement('input'); input.type = 'file'; input.accept = '.json';
+      input.onchange = (e) => {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const data = JSON.parse(event.target.result);
+          if (mode === 'overwrite') {
+            lines.forEach(l => { if (l.polyline) map.removeLayer(l.polyline); if (l.borderPolyline) map.removeLayer(l.borderPolyline); });
+            stations.forEach(s => map.removeLayer(s.marker));
+            folders = []; lines = []; stations = []; trainList = []; 
+            expressTypes = [{ id: 'express_local_fixed', name: '各駅停車', color: '#007acc', isFixed: true }]; 
+            expressStops = {};
+          }
+          if (data.expressTypes) {
+            data.expressTypes.forEach(et => {
+              if (!expressTypes.some(x => x.name === et.name)) expressTypes.push(et);
+            });
+          }
+          if (data.expressStops) {
+            for (let k in data.expressStops) {
+              if (!expressStops[k]) expressStops[k] = {};
+              Object.assign(expressStops[k], data.expressStops[k]);
+            }
+          }
+          if (data.folders) {
+            data.folders.forEach(f => {
+              if (!folders.some(x => x.id === f.id)) folders.push(f);
+            });
+          }
+          if (data.lines) {
+            data.lines.forEach(l => {
+              l.points = l.points.map(p => L.latLng(p[0], p[1]));
+              lines.push(l);
+              updateLinePolylines(l);
+            });
+          }
+          if (data.stations) {
+            data.stations.forEach(s => {
+              const latlng = Array.isArray(s.latlng) ? L.latLng(s.latlng[0], s.latlng[1]) : s.latlng;
+              const marker = L.marker(latlng, { icon: createStationMarkerIcon('各駅停車'), draggable: true }).addTo(map);
+              marker.bindTooltip(s.name, { permanent: true, direction: 'top' });
+              let newSt = { id: Date.now() + Math.random(), name: s.name, marker, latlng: marker.getLatLng() };
+              stations.push(newSt);
+              marker.on('click', (evt) => handleStationClick(evt, newSt));
+            });
+          }
+          sortExpressTypes();
+          renderLineList();
+          if (trainList.length === 0) addNewTrain();
+          alert(mode === 'overwrite' ? '上書きロード完了しました' : '追加ロード完了しました');
+        };
+        reader.readAsText(e.target.files[0]);
+      };
+      input.click();
+    }
+
+    // --- キャプチャ関連 ---
+    function openCaptureModal() {
+      document.getElementById('capture-modal').style.display = 'flex';
+      resetZoomPreview();
+      switchCaptureTab('deformed');
+    }
+    function closeCaptureModal() { document.getElementById('capture-modal').style.display = 'none'; }
+
+    function switchCaptureTab(mode) {
+      currentCaptureMode = mode;
+      document.getElementById('tab-deformed-btn').classList.toggle('active', mode === 'deformed');
+      document.getElementById('tab-real-btn').classList.toggle('active', mode === 'real');
+      if (mode === 'deformed') {
+        document.getElementById('deformed-canvas').style.display = 'block';
+        document.getElementById('captured-image').style.display = 'none';
+        renderDeformedRouteMap();
+      } else {
+        document.getElementById('deformed-canvas').style.display = 'none';
+        document.getElementById('captured-image').style.display = 'block';
+        captureRealMap();
+      }
+      resetZoomPreview();
+    }
+
+    function zoomPreview(delta) {
+      currentZoomScale = Math.min(Math.max(0.2, currentZoomScale + delta), 4.0);
+      updateZoomTransform();
+    }
+    function resetZoomPreview() { currentZoomScale = 0.6; panX = 0; panY = 0; updateZoomTransform(); }
+    function updateZoomTransform() {
+      document.getElementById('zoom-wrapper').style.transform = `translate(${panX}px, ${panY}px) scale(${currentZoomScale})`;
+      document.getElementById('zoom-level-label').innerText = `${Math.round(currentZoomScale * 100)}%`;
+    }
+
+    const captureContainer = document.getElementById('captured-container');
+    captureContainer.addEventListener('wheel', (e) => { e.preventDefault(); zoomPreview(e.deltaY < 0 ? 0.1 : -0.1); });
+    captureContainer.addEventListener('mousedown', (e) => { isPanning = true; startPanX = e.clientX - panX; startPanY = e.clientY - panY; });
+    window.addEventListener('mousemove', (e) => {
+      if (!isPanning) return;
+      panX = e.clientX - startPanX; panY = e.clientY - startPanY;
+      updateZoomTransform();
+    });
+    window.addEventListener('mouseup', () => { isPanning = false; });
+
+    function captureRealMap() {
+      html2canvas(document.getElementById('map'), { useCORS: true, allowTaint: true, logging: false, scale: 1.5 })
+        .then(renderedCanvas => { document.getElementById('captured-image').src = renderedCanvas.toDataURL('image/png'); });
+    }
+
+    function renderDeformedRouteMap() {
+      const canvas = document.getElementById('deformed-canvas');
+      const ctx = canvas.getContext('2d');
+      const width = 1400, height = 900;
+      canvas.width = width; canvas.height = height;
+      ctx.fillStyle = '#181818'; ctx.fillRect(0, 0, width, height);
+
+      if (stations.length === 0 || lines.length === 0) return;
+
+      const bounds = map.getBounds();
+      const minLat = bounds.getSouth(), maxLat = bounds.getNorth();
+      const minLng = bounds.getWest(), maxLng = bounds.getEast();
+      const latRange = (maxLat - minLat) || 0.01, lngRange = (maxLng - minLng) || 0.01;
+      const margin = 120, effW = width - margin * 2, effH = height - margin * 2;
+
+      const stationPos = {};
+      stations.forEach(st => {
+        let x = margin + ((st.latlng.lng - minLng) / lngRange) * effW;
+        let y = height - (margin + ((st.latlng.lat - minLat) / latRange) * effH);
+        stationPos[st.id] = { x, y, name: st.name };
+      });
+
+      lines.forEach(lineObj => {
+        let sortedStations = stations.map(st => {
+          let match = getNearestLineAndIndexOnLine(st.latlng, lineObj);
+          return { st, idx: match.index, dist: match.dist };
+        }).filter(item => item.dist < 150).sort((a, b) => a.idx - b.idx).map(item => item.st);
+
+        if (sortedStations.length < 2) return;
+        const folder = folders.find(f => f.id === lineObj.folderId);
+        let lineColor = lineObj.isBranch ? (lineObj.color || '#ff9900') : ((folder && folder.isBranchFolder) ? folder.color : lineObj.color);
+
+        ctx.strokeStyle = lineColor; ctx.lineWidth = lineObj.isBranch ? 4 : 6; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+        ctx.beginPath();
+        sortedStations.forEach((st, idx) => {
+          let pos = stationPos[st.id];
+          if (idx === 0) ctx.moveTo(pos.x, pos.y); else ctx.lineTo(pos.x, pos.y);
+        });
+        ctx.stroke();
+      });
+
+      Object.values(stationPos).forEach(pos => {
+        ctx.fillStyle = '#007acc'; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2.5;
+        ctx.beginPath(); ctx.arc(pos.x, pos.y, 6, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#ffffff'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+        ctx.fillText(pos.name, pos.x, pos.y - 10);
+      });
+    }
+
+    function downloadCurrentCapture() {
+      let dataUrl = currentCaptureMode === 'deformed' ? document.getElementById('deformed-canvas').toDataURL('image/png') : document.getElementById('captured-image').src;
+      if (!dataUrl) return;
+      const a = document.createElement('a'); a.href = dataUrl; a.download = `route_map_${currentCaptureMode}.png`; a.click();
+    }
+
+    // --- 速達種別 ---
+    function getCharTypeScript(str) {
+      if (!str || str.length === 0) return 3;
+      const first = str.charAt(0);
+      if (/^[ぁ-んァ-ン]/.test(first)) return 1;
+      if (/^[\u4e00-\u9faf\u3400-\u4dbf]/.test(first)) return 2;
+      return 3;
+    }
+
+    function sortExpressTypes() {
+      expressTypes.sort((a, b) => {
+        if (a.isFixed) return -1;
+        if (b.isFixed) return 1;
+        let typeA = getCharTypeScript(a.name);
+        let typeB = getCharTypeScript(b.name);
+        if (typeA !== typeB) return typeA - typeB;
+        return a.name.localeCompare(b.name, 'ja');
+      });
+      renderExpressList();
+    }
+
+    let activeExpressConfigId = null;
+
+    function addNewExpressType() {
+      const name = prompt('速達種別名を入力してください (例: 特急、快速):', `種別 ${expressTypes.length}`);
+      if (!name) return;
+      if (name === '各駅停車') return alert('「各駅停車」は標準で固定されています。');
+      expressTypes.push({ id: 'exp_' + Date.now(), name, color: '#ff6600', isFixed: false });
+      sortExpressTypes();
+    }
+
+    function updateExpressConfig(id, newName, newColor) {
+      const e = expressTypes.find(item => item.id === id);
+      if (!e) return;
+      if (e.isFixed && newName !== undefined) {
+        alert('「各駅停車」の名前は変更できません。');
+        return;
+      }
+      if (newName !== undefined) e.name = newName;
+      if (newColor !== undefined) e.color = newColor;
+      sortExpressTypes();
+    }
+
+    function deleteExpressType(id) {
+      const e = expressTypes.find(item => item.id === id);
+      if (e && e.isFixed) {
+        alert('「各駅停車」は削除できません。');
+        return;
+      }
+      if (!confirm('この速達種別を削除しますか？')) return;
+      expressTypes = expressTypes.filter(item => item.id !== id);
+      delete expressStops[id];
+      renderExpressList();
+    }
+
+    function selectExpressForConfig(id) {
+      activeExpressConfigId = id;
+      setMode('express-config');
+      renderExpressList();
+      let e = expressTypes.find(item => item.id === id);
+      alert(`「${e.name}」の停車駅設定モードになりました。マップ上の駅を左クリックして停車/通過を切り替えてください。`);
+    }
+
+    function renderExpressList() {
+      const container = document.getElementById('express-list-container');
+      container.innerHTML = '';
+      if (expressTypes.length === 0) {
+        container.innerHTML = '<p style="font-size: 11px; color:#888;">速達種別がありません</p>';
+        return;
+      }
+      expressTypes.forEach(e => {
+        const item = document.createElement('div');
+        item.className = 'express-item';
+        let isSelected = activeExpressConfigId === e.id;
+        item.style.border = isSelected ? '1px solid #00ffcc' : '1px solid transparent';
+        item.innerHTML = `
+          <input type="color" class="folder-color-input" value="${e.color}" onchange="updateExpressConfig('${e.id}', undefined, this.value)">
+          <input type="text" value="${e.name}" ${e.isFixed ? 'disabled style="background:#222; color:#aaa; margin:0; padding:2px 4px; font-size:11px; width:90px;"' : 'style="margin:0; padding:2px 4px; font-size:11px; width:90px;"'} onchange="updateExpressConfig('${e.id}', this.value, undefined)">
+          <button onclick="selectExpressForConfig('${e.id}')" style="font-size:10px; padding:2px 5px; background:${isSelected ? '#20c997' : '#007acc'};">🎯 停車駅設定</button>
+          ${e.isFixed ? '<span style="font-size:10px; color:#888; padding:2px 4px;">[固定]</span>' : `<button onclick="deleteExpressType('${e.id}')" style="font-size:10px; padding:2px 4px; background:#dc3545;">🗑️</button>`}
+        `;
+        container.appendChild(item);
+      });
+    }
+
+    // --- フォルダ・路線管理 ---
+    function addNewFolder() {
+      const name = prompt('フォルダ名を入力してください:', `グループ ${folders.length + 1}`);
+      if (!name) return;
+      folders.push({ id: Date.now(), name, color: '#ffcc00', isBranchFolder: false });
+      renderLineList();
+    }
+
+    function updateFolderConfig(folderId, newName, newColor) {
+      const f = folders.find(item => item.id === folderId);
+      if (!f) return;
+      if (newName !== undefined) f.name = newName;
+      if (newColor !== undefined) f.color = newColor;
+      lines.forEach(l => { if (l.folderId === folderId) updateLinePolylines(l); });
+      renderLineList();
+    }
+
+    function toggleBranchFolder(folderId) {
+      const f = folders.find(item => item.id === folderId);
+      if (!f) return;
+      f.isBranchFolder = !f.isBranchFolder;
+      lines.forEach(l => { if (l.folderId === folderId) updateLinePolylines(l); });
+      renderLineList();
+    }
+
+    function deleteFolder(folderId) {
+      if (!confirm('このフォルダを削除しますか？')) return;
+      folders = folders.filter(f => f.id !== folderId);
+      lines.forEach(l => { if (l.folderId === folderId) { l.folderId = null; updateLinePolylines(l); } });
+      renderLineList();
+    }
+
+    function assignLineToFolder(lineId, folderIdStr) {
+      const line = lines.find(l => l.id === lineId);
+      if (!line) return;
+      line.folderId = folderIdStr ? parseInt(folderIdStr, 10) : null;
+      updateLinePolylines(line);
+      renderLineList();
+    }
+
+    function toggleLineBranch(lineId) {
+      const line = lines.find(l => l.id === lineId);
+      if (!line) return;
+      line.isBranch = !line.isBranch;
+      updateLinePolylines(line);
+      renderLineList();
+    }
+
+    function updateLinePolylines(lineObj) {
+      if (lineObj.borderPolyline) map.removeLayer(lineObj.borderPolyline);
+      if (lineObj.polyline) map.removeLayer(lineObj.polyline);
+      const folder = folders.find(f => f.id === lineObj.folderId);
+      
+      let activeColor = lineObj.isBranch ? lineObj.color : ((folder && folder.isBranchFolder) ? folder.color : lineObj.color);
+      let weight = lineObj.isBranch ? 4 : 5;
+      let dashArray = lineObj.isBranch ? '6,3' : null;
+      let borderColor = folder ? folder.color : null;
+
+      if (borderColor && !lineObj.isBranch) {
+        lineObj.borderPolyline = L.polyline(lineObj.points, { color: borderColor, weight: 9, opacity: 0.9 }).addTo(map);
+      }
+      lineObj.polyline = L.polyline(lineObj.points, { color: activeColor, weight: weight, dashArray: dashArray }).addTo(map);
+    }
+
+    function finishCurrentLine() {
+      if (currentDrawingPoints.length < 2) return alert('路線を描画してください');
+      if (eraserState.active && currentMode === 'eraser-draw') {
+        let lineObj = lines.find(l => l.id === eraserState.lineId);
+        if (lineObj) {
+          let sortedIndices = Array.from(eraserState.erasedIndices).sort((a, b) => a - b);
+          let head = lineObj.points.slice(0, sortedIndices[0]);
+          let tail = lineObj.points.slice(sortedIndices[sortedIndices.length - 1] + 1);
+          lineObj.points = head.concat(currentDrawingPoints, tail);
+          updateLinePolylines(lineObj);
+        }
+        discardCurrentDrawing();
+        renderLineList();
+        alert('区間修正を保存しました！');
+        return;
+      }
+      discardCurrentDrawing();
+    }
+
+    function discardCurrentDrawing() {
+      if (currentPolyline) { map.removeLayer(currentPolyline); currentPolyline = null; }
+      if (eraserState.eraserPolyline) { map.removeLayer(eraserState.eraserPolyline); eraserState.eraserPolyline = null; }
+      currentDrawingPoints = [];
+      eraserState.active = false; eraserState.lineId = null; eraserState.erasedIndices.clear();
+      document.getElementById('finish-eraser-btn').style.display = 'none';
+      document.getElementById('finish-line-btn').style.display = 'none';
+
+      if (activePlanState.active) {
+        if (activePlanState.ghostPolyline) map.removeLayer(activePlanState.ghostPolyline);
+        if (activePlanState.solidPolyline) map.removeLayer(activePlanState.solidPolyline);
+        activePlanState.active = false; activePlanState.isLocked = false;
+        document.getElementById('finish-plan-btn').style.display = 'none';
+      }
+      setMode('pan');
+    }
+
+    function reverseLineDirection(lineId) {
+      const l = lines.find(item => item.id === lineId);
+      if (!l) return;
+      l.points.reverse();
+      updateLinePolylines(l);
+      alert(`「${l.name}」の向きを反転しました。`);
+    }
+
+    function startPlanMode(targetLineId = null) {
+      activePlanState.active = true;
+      activePlanState.targetLineId = targetLineId;
+      activePlanState.rawPoints = []; activePlanState.currentIndex = 0; activePlanState.isLocked = false;
+
+      if (activePlanState.ghostPolyline) map.removeLayer(activePlanState.ghostPolyline);
+      if (activePlanState.solidPolyline) map.removeLayer(activePlanState.solidPolyline);
+
+      activePlanState.ghostPolyline = L.polyline([], { color: '#666', weight: 4, dashArray: '6,6' }).addTo(map);
+      activePlanState.solidPolyline = L.polyline([], { color: '#17a2b8', weight: 6 }).addTo(map);
+
+      if (targetLineId) {
+        const tLine = lines.find(l => l.id === targetLineId);
+        if (tLine && tLine.points.length > 0) activePlanState.rawPoints.push(tLine.points[tLine.points.length - 1]);
+      }
+
+      setMode('plan');
+      document.getElementById('finish-plan-btn').style.display = 'inline-flex';
+    }
+
+    function finishPlanLine() {
+      if (!activePlanState.active || activePlanState.rawPoints.length < 2) return alert('計画線が描画されていません');
+      const solidPts = activePlanState.rawPoints.slice(0, activePlanState.currentIndex + 1);
+      if (solidPts.length < 2) return alert('実線部分がありません');
+
+      if (activePlanState.targetLineId) {
+        const targetLine = lines.find(l => l.id === activePlanState.targetLineId);
+        if (targetLine) {
+          targetLine.points = targetLine.points.concat(solidPts.slice(1));
+          updateLinePolylines(targetLine);
+          discardCurrentDrawing();
+          renderLineList();
+          alert(`路線「${targetLine.name}」を正常に延長しました！`);
+          return;
+        }
+      }
+
+      const planId = Date.now();
+      const planObj = {
+        id: planId, name: `計画線 ${plannedLines.length + 1}`, points: solidPts,
+        ghostPolyline: L.polyline(solidPts, { color: '#17a2b8', weight: 5, dashArray: '8,8', opacity: 0.8 }).addTo(map)
+      };
+      plannedLines.push(planObj);
+      renderPlanList();
+      discardCurrentDrawing();
+      alert('計画線を固定表示として保存しました！');
+    }
+
+    function deletePlannedLine(planId) {
+      const p = plannedLines.find(item => item.id === planId);
+      if (p) {
+        if (p.ghostPolyline) map.removeLayer(p.ghostPolyline);
+        plannedLines = plannedLines.filter(item => item.id !== planId);
+        renderPlanList();
+      }
+    }
+
+    function promotePlannedLineToReal(planId) {
+      const p = plannedLines.find(item => item.id === planId);
+      if (!p) return;
+      const lineObj = {
+        id: Date.now(), name: p.name.replace('計画線', '路線'), color: lineColors[lines.length % lineColors.length],
+        folderId: null, isBranch: false, points: p.points, polyline: null, borderPolyline: null
+      };
+      lines.push(lineObj);
+      updateLinePolylines(lineObj);
+      deletePlannedLine(planId);
+      renderLineList();
+      alert('計画線を正式な路線に昇格させました！');
+    }
+
+    function renderPlanList() {
+      const container = document.getElementById('plan-list-container');
+      container.innerHTML = '';
+      if (plannedLines.length === 0) {
+        container.innerHTML = '<p style="font-size: 11px; color:#888;">固定された計画線はありません</p>';
+        return;
+      }
+      plannedLines.forEach(p => {
+        const item = document.createElement('div');
+        item.className = 'plan-item';
+        item.innerHTML = `
+          <span style="color:#17a2b8; font-size:12px;">📐</span>
+          <span style="flex:1; font-size:11px;">${p.name}</span>
+          <button onclick="promotePlannedLineToReal(${p.id})" style="font-size:10px; padding:2px 5px; background:#28a745;">✅ 実線化</button>
+          <button onclick="deletePlannedLine(${p.id})" style="font-size:10px; padding:2px 5px; background:#d9534f;">🗑️ 削除</button>
+        `;
+        container.appendChild(item);
+      });
+    }
+
+    function renderLineList() {
+      const container = document.getElementById('line-list-container');
+      container.innerHTML = '';
+      if (lines.length === 0 && folders.length === 0) {
+        container.innerHTML = '<p style="font-size: 11px; color:#888;">路線またはフォルダが存在しません</p>';
+        return;
+      }
+      folders.forEach(folder => {
+        const folderDiv = document.createElement('div');
+        folderDiv.className = 'folder-item';
+        folderDiv.innerHTML = `
+          <div class="folder-header">
+            <span>📁</span>
+            <input type="text" value="${folder.name}" style="margin:0; padding:2px 4px; font-size:11px;" onchange="updateFolderConfig(${folder.id}, this.value, undefined)">
+            <input type="color" class="folder-color-input" value="${folder.color}" onchange="updateFolderConfig(${folder.id}, undefined, this.value)">
+            <button onclick="toggleBranchFolder(${folder.id})" style="width:auto; padding:2px 6px; font-size:10px; background:${folder.isBranchFolder ? '#28a745' : '#444'};">${folder.isBranchFolder ? '🌿 支線ON' : '🌿 支線OFF'}</button>
+            <button onclick="deleteFolder(${folder.id})" style="width:auto; padding:2px 4px; font-size:10px; background:#dc3545;">🗑️</button>
+          </div>
+        `;
+        lines.filter(l => l.folderId === folder.id).forEach(l => folderDiv.appendChild(createLineRowElement(l, true)));
+        container.appendChild(folderDiv);
+      });
+      lines.filter(l => !l.folderId).forEach(l => container.appendChild(createLineRowElement(l, false)));
+    }
+
+    function createLineRowElement(lineObj, isInFolder) {
+      const item = document.createElement('div');
+      item.className = `line-item ${isInFolder ? 'in-folder' : ''}`;
+      let folderOptions = `<option value="">(未分類)</option>`;
+      folders.forEach(f => { folderOptions += `<option value="${f.id}" ${lineObj.folderId === f.id ? 'selected' : ''}>📁 ${f.name}</option>`; });
+
+      item.innerHTML = `
+        <span class="line-color-badge" style="background:${lineObj.color}"></span>
+        <input type="text" value="${lineObj.name}" style="margin:0; padding:2px 4px; font-size:11px; width:70px;" onchange="updateLineName(${lineObj.id}, this.value)">
+        <select style="margin:0; padding:2px; font-size:10px; width:auto; max-width:70px;" onchange="assignLineToFolder(${lineObj.id}, this.value)">${folderOptions}</select>
+        <div style="display:flex; gap:2px; width:100%; margin-top:2px;">
+          <button onclick="toggleLineBranch(${lineObj.id})" style="font-size:10px; padding:2px; background:${lineObj.isBranch ? '#28a745' : '#444'};" title="個別支線切替">🌿</button>
+          <button onclick="reverseLineDirection(${lineObj.id})" style="font-size:10px; padding:2px; background:#444;" title="反転">🔄</button>
+          <button onclick="startPlanMode(${lineObj.id})" style="font-size:10px; padding:2px; background:#17a2b8;" title="終点から延長">📐</button>
+        </div>
+      `;
+      return item;
+    }
+
+    function updateLineName(lineId, newName) {
+      const l = lines.find(item => item.id === lineId);
+      if (l) l.name = newName;
+    }
+
+    const mapContainer = document.getElementById('map');
+    mapContainer.addEventListener('mousedown', (e) => {
+      if (currentMode === 'plan' && activePlanState.active && !activePlanState.isLocked) {
+        let pt = map.mouseEventToLatLng(e);
+        activePlanState.rawPoints.push(pt);
+        activePlanState.ghostPolyline.setLatLngs(activePlanState.rawPoints);
+      }
+    });
+
+    mapContainer.addEventListener('mousemove', (e) => {
+      let pt = map.mouseEventToLatLng(e);
+      if (activePlanState.active && currentMode === 'plan') {
+        if (e.buttons === 1 && !activePlanState.isLocked) {
+          activePlanState.rawPoints.push(pt);
+          activePlanState.ghostPolyline.setLatLngs(activePlanState.rawPoints);
+        }
+        if (activePlanState.rawPoints.length > 0 && !activePlanState.isLocked) {
+          let minD = Infinity, nearest = 0;
+          activePlanState.rawPoints.forEach((p, idx) => {
+            let d = p.distanceTo(pt);
+            if (d < minD) { minD = d; nearest = idx; }
+          });
+          activePlanState.currentIndex = nearest;
+          activePlanState.solidPolyline.setLatLngs(activePlanState.rawPoints.slice(0, activePlanState.currentIndex + 1));
+        }
+      }
+    });
+
+    function setMode(mode) {
+      currentMode = mode;
+      selectedTransferStation = null;
+      if (mode === 'pan') map.dragging.enable(); else map.dragging.disable();
+      updateKeyGuide(mode);
+    }
+
+    function createStationMarkerIcon(expressTypeName = '') {
+      let isSpecial = expressTypeName && expressTypeName !== '各駅停車';
+      let bgColor = isSpecial ? '#ff6600' : '#007acc';
+      return L.divIcon({
+        className: 'custom-station-icon',
+        html: `<div class="station-marker ${isSpecial ? 'limited' : ''}" style="background:${bgColor};"></div>`,
+        iconSize: [14, 14], iconAnchor: [7, 7]
+      });
+    }
+
+    map.on('click', (e) => {
+      if (currentMode === 'station') {
+        const name = prompt('駅名を入力してください:', `駅${stations.length + 1}`);
+        if (!name) return;
+        const marker = L.marker(e.latlng, { icon: createStationMarkerIcon('各駅停車'), draggable: true }).addTo(map);
+        marker.bindTooltip(name, { permanent: true, direction: 'top' });
+        const st = { id: Date.now() + Math.random(), name, marker, latlng: e.latlng };
+        stations.push(st);
+        marker.on('click', (evt) => handleStationClick(evt, st));
+      }
+    });
+
+    function handleStationClick(evt, st) {
+      if (evt) L.DomEvent.stopPropagation(evt);
+      
+      if (currentMode === 'express-config') {
+        if (!activeExpressConfigId) {
+          alert('先にサイドバーから設定する速達種別を選択してください。');
+          return;
+        }
+        let exp = expressTypes.find(e => e.id === activeExpressConfigId);
+        if (exp && exp.isFixed) {
+          alert('「各駅停車」は全駅停車固定のため、通過設定に変更することはできません。');
+          return;
+        }
+
+        if (!expressStops[activeExpressConfigId]) expressStops[activeExpressConfigId] = {};
+        let isStopped = !!expressStops[activeExpressConfigId][st.id];
+        isStopped = !isStopped;
+        expressStops[activeExpressConfigId][st.id] = isStopped;
+
+        st.marker.setIcon(L.divIcon({
+          className: 'custom-station-icon',
+          html: `<div class="station-marker" style="background:${isStopped ? exp.color : '#555'};"></div>`,
+          iconSize: [14, 14], iconAnchor: [7, 7]
+        }));
+        st.marker.bindTooltip(`${st.name} (${exp.name}: ${isStopped ? '停車' : '通過'})`, { permanent: true, direction: 'top' });
+        return;
+      }
+
+      if (currentMode === 'start') { getActiveTrain().startStation = st; document.getElementById('start-name').innerText = st.name; }
+      else if (currentMode === 'end') { getActiveTrain().endStation = st; document.getElementById('end-name').innerText = st.name; }
+      else if (currentMode === 'via') { getActiveTrain().viaStations.push(st); updateViaDisplay(); }
+    }
+
+    function updateViaDisplay() {
+      const t = getActiveTrain();
+      if (t) document.getElementById('via-names').innerText = t.viaStations.length === 0 ? 'なし' : t.viaStations.map(s => s.name).join(' → ');
+    }
+
+    function clearViaStations() {
+      const t = getActiveTrain();
+      if (t) { t.viaStations = []; updateViaDisplay(); }
+    }
+
+    function createNewTrainObject(id, name) {
+      return { id, name, startStation: null, viaStations: [], endStation: null, expressName: '各駅停車', speedKmH: 60, stopTimeSec: 3, timetable: [], marker: null };
+    }
+    function addNewTrain() {
+      let t = createNewTrainObject(Date.now(), `列車 ${trainList.length + 1}`);
+      trainList.push(t);
+      selectTrain(t.id);
+    }
+    function selectTrain(id) { activeTrainId = id; renderTrainTabs(); loadActiveTrainToUI(); }
+    function renderTrainTabs() {
+      const c = document.getElementById('train-tabs-container'); c.innerHTML = '';
+      trainList.forEach(t => {
+        let b = document.createElement('button');
+        b.className = `train-tab ${t.id === activeTrainId ? 'active' : ''}`;
+        b.innerText = t.name; b.onclick = () => selectTrain(t.id);
+        c.appendChild(b);
+      });
+    }
+    function getActiveTrain() { return trainList.find(t => t.id === activeTrainId); }
+    function loadActiveTrainToUI() {
+      let t = getActiveTrain();
+      if (!t) return;
+      document.getElementById('active-train-title').innerText = t.name;
+      document.getElementById('start-name').innerText = t.startStation ? t.startStation.name : '未設定';
+      document.getElementById('end-name').innerText = t.endStation ? t.endStation.name : '未設定';
+      document.getElementById('train-express-name').value = t.expressName || '各駅停車';
+      document.getElementById('train-speed').value = t.speedKmH;
+      document.getElementById('stop-time').value = t.stopTimeSec;
+      updateViaDisplay();
+    }
+    function updateActiveTrainConfig() {
+      let t = getActiveTrain();
+      if (!t) return;
+      t.expressName = document.getElementById('train-express-name').value.trim();
+      t.speedKmH = parseFloat(document.getElementById('train-speed').value) || 60;
+      t.stopTimeSec = parseInt(document.getElementById('stop-time').value, 10) || 3;
+    }
+
+    function generateTimetableForActiveTrain() {
+      const t = getActiveTrain();
+      if (!t || !t.startStation || !t.endStation) return alert('始点と終点を設定してください');
+
+      let routeStations = [t.startStation, ...t.viaStations, t.endStation];
+      
+      if (t.expressName !== '各駅停車') {
+        let expType = expressTypes.find(e => e.name === t.expressName);
+        if (expType && expressStops[expType.id]) {
+          let allowedStops = expressStops[expType.id];
+          routeStations = routeStations.filter((st, idx) => {
+            if (idx === 0 || idx === routeStations.length - 1) return true;
+            return !!allowedStops[st.id];
+          });
+        }
+      }
+
+      let tbody = document.getElementById('timetable-body');
+      tbody.innerHTML = '';
+      t.timetable = [];
+
+      let currentTime = document.getElementById('timetable-start-time').value || '08:00';
+      let [h, m] = currentTime.split(':').map(Number);
+      let totalSec = h * 3600 + m * 60;
+      let travelSec = parseInt(document.getElementById('default-travel-sec').value, 10) || 60;
+
+      routeStations.forEach((st, idx) => {
+        let arrSec = idx === 0 ? totalSec : totalSec + travelSec;
+        let depSec = arrSec + (idx === routeStations.length - 1 ? 0 : t.stopTimeSec);
+        totalSec = depSec;
+
+        let arrStr = `${String(Math.floor(arrSec/3600)%24).padStart(2,'0')}:${String(Math.floor((arrSec%3600)/60)).padStart(2,'0')}`;
+        let depStr = `${String(Math.floor(depSec/3600)%24).padStart(2,'0')}:${String(Math.floor((depSec%3600)/60)).padStart(2,'0')}`;
+
+        t.timetable.push({ station: st, arr: arrStr, dep: depStr });
+
+        let row = document.createElement('tr');
+        row.innerHTML = `<td>${st.name}</td><td>${arrStr}</td><td>${depStr}</td>`;
+        tbody.appendChild(row);
+      });
+
+      alert(`速達種別「${t.expressName}」のダイヤを生成しました（停車駅数: ${routeStations.length}駅）`);
+      renderLEDPreview(t);
+    }
+
+    function renderLEDPreview(train) {
+      const container = document.getElementById('display-text');
+      container.innerHTML = '';
+      if (!train.timetable || train.timetable.length === 0) return;
+
+      let textToShow = `至 ${train.endStation ? train.endStation.name : ''} [${train.expressName}]`;
+      for (let i = 0; i < textToShow.length; i++) {
+        let matrix = document.createElement('div');
+        matrix.className = 'char-matrix';
+        for (let p = 0; p < 256; p++) {
+          let px = document.createElement('div');
+          px.className = 'pixel' + (p % 3 === 0 ? ' on' : '');
+          matrix.appendChild(px);
+        }
+        container.appendChild(matrix);
+      }
+    }
+
+    addNewTrain();
+    sortExpressTypes();
+  </script>
+</body>
+</html>
