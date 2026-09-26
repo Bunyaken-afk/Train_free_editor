@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>電車内表示器エディタ v4.31 (完全修正版)</title>
+  <title>電車内表示器エディタ v4.32 (計画線Shiftロック修復版)</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -345,11 +345,11 @@
   </div>
 
   <script>
-    // --- 画面構造リセット・完全版エディタ (v4.31) ---
+    // --- 計画線Shiftロック修復版エディタ (v4.32) ---
 
     localforage.config({
-      name: 'TrainEditorApp_RiasCoast_v17',
-      storeName: 'works_rias_coast_v17',
+      name: 'TrainEditorApp_RiasCoast_v18',
+      storeName: 'works_rias_coast_v18',
       size: 50 * 1024 * 1024
     });
 
@@ -1410,7 +1410,21 @@
       if (l) l.name = newName;
     }
 
+    // --- 計画線モードのShiftキーロック制御を完全復活 ---
     const mapContainer = document.getElementById('map');
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Shift' && currentMode === 'plan' && activePlanState.active) {
+        activePlanState.isLocked = !activePlanState.isLocked;
+        let guideBox = document.getElementById('key-guide-box');
+        if (activePlanState.isLocked) {
+          guideBox.innerHTML = `<span style="color:#ffcc00;">🔒 【計画線ロック中】位置が固定されました。もう一度Shiftキーを押すと解除されます。</span>`;
+        } else {
+          guideBox.innerHTML = `<span>💡 【計画線・延長モード】ドラッグで点設置 ｜ [Shift]キー: ロック切替</span>`;
+        }
+      }
+    });
+
     mapContainer.addEventListener('mousedown', (e) => {
       if (currentMode === 'plan' && activePlanState.active && !activePlanState.isLocked) {
         let pt = map.mouseEventToLatLng(e);
@@ -1420,13 +1434,16 @@
     });
 
     mapContainer.addEventListener('mousemove', (e) => {
-      let pt = map.mouseEventToLatLng(e);
-      if (activePlanState.active && currentMode === 'plan') {
-        if (e.buttons === 1 && !activePlanState.isLocked) {
+      if (currentMode === 'plan' && activePlanState.active) {
+        // ロック中のときはマウス移動による追従を完全に停止する
+        if (activePlanState.isLocked) return;
+
+        let pt = map.mouseEventToLatLng(e);
+        if (e.buttons === 1) {
           activePlanState.rawPoints.push(pt);
           activePlanState.ghostPolyline.setLatLngs(activePlanState.rawPoints);
         }
-        if (activePlanState.rawPoints.length > 0 && !activePlanState.isLocked) {
+        if (activePlanState.rawPoints.length > 0) {
           let minD = Infinity, nearest = 0;
           activePlanState.rawPoints.forEach((p, idx) => {
             let d = p.distanceTo(pt);
