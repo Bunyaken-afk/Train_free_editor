@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>電車内表示器エディタ v4.7 (15駅以上共有制限版)</title>
+  <title>電車内表示器エディタ v4.10 (仮想地名対応・IndexedDB版)</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -250,11 +250,11 @@
       <p style="font-size: 12px; color: #ccc;">作品に名前を付けて全体公開するか、名前なし（名無しの作品集・1時間限定）で共有するか選択できます。<br><b style="color:#ffcc00;">※共有には15駅以上配置されている必要があります（現在: <span id="share-station-count">0</span>駅）</b></p>
       <div>
         <label style="font-size: 11px;">作品名 (空欄の場合は「名無しの作品集」):</label>
-        <input type="text" id="share-work-name" placeholder="例: 東京近郊高速鉄道網">
+        <input type="text" id="share-work-name" placeholder="例: あおぞら市高速鉄道網">
       </div>
       <div>
-        <label style="font-size: 11px;">通る市町村のタグ (カンマ区切り):</label>
-        <input type="text" id="share-work-tags" placeholder="例: 八王子市, 多摩市, 町田市">
+        <label style="font-size: 11px;">地域・市町村タグ (カンマ区切り、例: あおぞら市, ひまわり町):</label>
+        <input type="text" id="share-work-tags" placeholder="例: あおぞら市, ひまわり町">
       </div>
       <div style="display: flex; gap: 10px; margin-top: 10px;">
         <button onclick="executeShare()" style="flex:1; background:#28a745;">🚀 共有する</button>
@@ -276,7 +276,7 @@
           <input type="text" id="search-name-input" placeholder="🔍 作品名で検索..." oninput="renderBrowseWorks()" style="margin:0; font-size:12px;">
         </div>
         <div style="flex:1;">
-          <input type="text" id="search-tag-input" placeholder="🏷️ タグ (市町村名) で検索..." oninput="renderBrowseWorks()" style="margin:0; font-size:12px;">
+          <input type="text" id="search-tag-input" placeholder="🏷️ タグ (地域名) で検索..." oninput="renderBrowseWorks()" style="margin:0; font-size:12px;">
         </div>
       </div>
 
@@ -328,6 +328,60 @@
   </div>
 
   <script>
+    // --- IndexedDB ストレージマネージャー ---
+    const DB_NAME = 'TrainEditorDB_v2';
+    const STORE_NAME = 'online_works';
+    let db = null;
+
+    function initDB() {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, 1);
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+          db = request.result;
+          resolve(db);
+        };
+        request.onupgradeneeded = (event) => {
+          const database = event.target.result;
+          if (!database.objectStoreNames.contains(STORE_NAME)) {
+            database.createObjectStore(STORE_NAME, { keyPath: 'id' });
+          }
+        };
+      });
+    }
+
+    function dbGetAllWorks() {
+      return new Promise((resolve) => {
+        if (!db) { resolve([]); return; }
+        const transaction = db.transaction(STORE_NAME, 'readonly');
+        const store = transaction.objectStore(STORE_NAME);
+        const request = store.getAll();
+        request.onsuccess = () => resolve(request.result || []);
+        request.onerror = () => resolve([]);
+      });
+    }
+
+    function dbSaveWork(workData) {
+      return new Promise((resolve, reject) => {
+        if (!db) { reject('DB未初期化'); return; }
+        const transaction = db.transaction(STORE_NAME, 'readwrite');
+        const store = transaction.objectStore(STORE_NAME);
+        const request = store.put(workData);
+        request.onsuccess = () => resolve(true);
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    function dbDeleteWork(workId) {
+      return new Promise((resolve) => {
+        if (!db) { resolve(); return; }
+        const transaction = db.transaction(STORE_NAME, 'readwrite');
+        const store = transaction.objectStore(STORE_NAME);
+        store.delete(workId);
+        transaction.oncomplete = () => resolve();
+      });
+    }
+
     const map = L.map('map', { dragging: true, preferCanvas: true }).setView([35.6812, 139.7671], 11);
 
     L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png', {
@@ -346,23 +400,16 @@
     ];
     let expressStops = {}; 
     
-    let onlineWorks = JSON.parse(localStorage.getItem('transit_online_works') || '[]');
     let userLikedWorks = JSON.parse(localStorage.getItem('transit_user_likes') || '{}');
 
     let currentDrawingPoints = [];
     let currentPolyline = null;
     let isDrawing = false;
-    let autoScrollInterval = null;
 
     let eraserState = { active: false, lineId: null, erasedIndices: new Set(), eraserPolyline: null, startPt: null, endPt: null };
     let activePlanState = { active: false, targetLineId: null, rawPoints: [], currentIndex: 0, ghostPolyline: null, solidPolyline: null, isLocked: false };
 
     let stations = [];
-    let transfers = [];
-    let selectedTransferStation = null;
-    let fontData = {};
-    let isTracking = false;
-    let isAudioOn = false;
     let trainList = [];
     let activeTrainId = null;
     let currentCaptureMode = 'deformed';
@@ -398,7 +445,6 @@
       btn.classList.toggle('toggle-on', isAudioOn);
     }
 
-    // --- 共有モーダル（15駅制限バリデーション付き） ---
     function openShareModal() {
       let currentStationCount = stations.length;
       document.getElementById('share-station-count').innerText = currentStationCount;
@@ -414,7 +460,7 @@
     }
     function closeShareModal() { document.getElementById('share-modal').style.display = 'none'; }
 
-    function executeShare() {
+    async function executeShare() {
       if (stations.length < 15) {
         alert('駅数が15駅未満のため共有できません。');
         closeShareModal();
@@ -428,6 +474,17 @@
       let title = isAnonymous ? '名無しの作品集' : titleInput;
       let tags = tagsInput ? tagsInput.split(',').map(t => t.trim()).filter(Boolean) : [];
 
+      let optimizedLines = lines.map(l => ({
+        ...l,
+        points: l.points.map(p => [Number(p.lat.toFixed(5)), Number(p.lng.toFixed(5))])
+      }));
+
+      let optimizedStations = stations.map(s => ({
+        id: s.id,
+        name: s.name,
+        latlng: [Number(s.latlng.lat.toFixed(5)), Number(s.latlng.lng.toFixed(5))]
+      }));
+
       let workData = {
         id: 'work_' + Date.now(),
         title: title,
@@ -438,39 +495,46 @@
         expiresAt: isAnonymous ? Date.now() + 3600 * 1000 : null,
         payload: {
           folders,
-          lines: lines.map(l => ({ ...l, points: l.points.map(p => [p.lat, p.lng]) })),
-          stations: stations.map(s => ({ id: s.id, name: s.name, latlng: [s.latlng.lat, s.latlng.lng] })),
+          lines: optimizedLines,
+          stations: optimizedStations,
           expressTypes,
           expressStops
         }
       };
 
-      onlineWorks = onlineWorks.filter(w => !w.expiresAt || w.expiresAt > Date.now());
-      onlineWorks.push(workData);
-      localStorage.setItem('transit_online_works', JSON.stringify(onlineWorks));
-
-      closeShareModal();
-      alert(isAnonymous ? '名無しの作品集として1時間限定で共有しました！' : `「${title}」をオンライン共有しました！`);
+      try {
+        await dbSaveWork(workData);
+        closeShareModal();
+        alert(isAnonymous ? '名無しの作品集として1時間限定で共有しました！' : `「${title}」をオンライン共有しました！`);
+      } catch (e) {
+        alert('エラー: データベースへの保存に失敗しました。');
+      }
     }
 
-    function openBrowseModal() {
+    async function openBrowseModal() {
       document.getElementById('search-name-input').value = '';
       document.getElementById('search-tag-input').value = '';
-      renderBrowseWorks();
+      await renderBrowseWorks();
       document.getElementById('browse-modal').style.display = 'flex';
     }
 
     function closeBrowseModal() { document.getElementById('browse-modal').style.display = 'none'; }
 
-    function renderBrowseWorks() {
+    async function renderBrowseWorks() {
       let now = Date.now();
-      onlineWorks = onlineWorks.filter(w => !w.expiresAt || w.expiresAt > now);
-      localStorage.setItem('transit_online_works', JSON.stringify(onlineWorks));
+      let allWorks = await dbGetAllWorks();
+
+      for (let w of allWorks) {
+        if (w.expiresAt && w.expiresAt <= now) {
+          await dbDeleteWork(w.id);
+        }
+      }
+      allWorks = allWorks.filter(w => !w.expiresAt || w.expiresAt > now);
 
       let nameQuery = document.getElementById('search-name-input').value.trim().toLowerCase();
       let tagQuery = document.getElementById('search-tag-input').value.trim().toLowerCase();
 
-      let filtered = onlineWorks.filter(w => {
+      let filtered = allWorks.filter(w => {
         let matchName = w.title.toLowerCase().includes(nameQuery);
         let matchTag = tagQuery === '' || w.tags.some(t => t.toLowerCase().includes(tagQuery));
         return matchName && matchTag;
@@ -520,8 +584,9 @@
       });
     }
 
-    function toggleLikeWork(workId) {
-      let work = onlineWorks.find(w => w.id === workId);
+    async function toggleLikeWork(workId) {
+      let allWorks = await dbGetAllWorks();
+      let work = allWorks.find(w => w.id === workId);
       if (!work) return;
 
       if (userLikedWorks[workId]) {
@@ -532,13 +597,14 @@
         work.likes += 1;
       }
 
-      localStorage.setItem('transit_online_works', JSON.stringify(onlineWorks));
+      await dbSaveWork(work);
       localStorage.setItem('transit_user_likes', JSON.stringify(userLikedWorks));
-      renderBrowseWorks();
+      await renderBrowseWorks();
     }
 
-    function previewWork(workId) {
-      let work = onlineWorks.find(w => w.id === workId);
+    async function previewWork(workId) {
+      let allWorks = await dbGetAllWorks();
+      let work = allWorks.find(w => w.id === workId);
       if (!work) return;
       document.getElementById('preview-title').innerText = `👁️ プレビュー: ${work.title}`;
       document.getElementById('preview-modal').style.display = 'flex';
@@ -565,8 +631,9 @@
 
     function closePreviewModal() { document.getElementById('preview-modal').style.display = 'none'; }
 
-    function loadWorkToEditor(workId, mode) {
-      let work = onlineWorks.find(w => w.id === workId);
+    async function loadWorkToEditor(workId, mode) {
+      let allWorks = await dbGetAllWorks();
+      let work = allWorks.find(w => w.id === workId);
       if (!work) return;
       if (!userLikedWorks[workId]) {
         alert('この作品を利用するには、まず「いいね」を押してください！');
@@ -624,7 +691,7 @@
     }
 
     function exportJSON() {
-      const data = { folders, lines: lines.map(l => ({ ...l, points: l.points.map(p => [p.lat, p.lng]) })), stations: stations.map(s => ({ id: s.id, name: s.name, latlng: [s.latlng.lat, s.latlng.lng] })), expressTypes, expressStops, fontData };
+      const data = { folders, lines: lines.map(l => ({ ...l, points: l.points.map(p => [p.lat, p.lng]) })), stations: stations.map(s => ({ id: s.id, name: s.name, latlng: [s.latlng.lat, s.latlng.lng] })), expressTypes, expressStops, fontData: {} };
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'train_editor_data.json'; a.click();
     }
@@ -1149,7 +1216,6 @@
 
     function setMode(mode) {
       currentMode = mode;
-      selectedTransferStation = null;
       if (mode === 'pan') map.dragging.enable(); else map.dragging.disable();
       updateKeyGuide(mode);
     }
@@ -1166,7 +1232,7 @@
 
     map.on('click', (e) => {
       if (currentMode === 'station') {
-        const name = prompt('駅名を入力してください:', `駅${stations.length + 1}`);
+        const name = prompt('駅名を入力してください:', `あおぞら駅${stations.length + 1}`);
         if (!name) return;
         const marker = L.marker(e.latlng, { icon: createStationMarkerIcon('各駅停車'), draggable: true }).addTo(map);
         marker.bindTooltip(name, { permanent: true, direction: 'top' });
@@ -1320,8 +1386,12 @@
       }
     }
 
-    addNewTrain();
-    sortExpressTypes();
+    initDB().then(() => {
+      addNewTrain();
+      sortExpressTypes();
+    }).catch(err => {
+      console.error('IndexedDB initialization failed:', err);
+    });
   </script>
 </body>
 </html>
