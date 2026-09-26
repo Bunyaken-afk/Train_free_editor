@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>電車内表示器エディタ v4.15 (超安定・大容量分割保存版)</title>
+  <title>電車内表示器エディタ v4.16 (座標自動間引き・大容量最適化版)</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -331,13 +331,33 @@
   </div>
 
   <script>
-    // --- 超安定・大容量チャンク分割保存マネージャー (v4.15) ---
+    // --- 座標自動間引きによる超軽量化・大容量共有マネージャー (v4.16) ---
     localforage.config({
-      name: 'TrainEditorApp_Chunks_Share_v3',
-      storeName: 'works_chunked_share_v3'
+      name: 'TrainEditorApp_Chunks_Share_v4',
+      storeName: 'works_chunked_share_v4'
     });
 
-    const CHUNK_SIZE = 100 * 1024; // 1パーツあたり100KBに安全軽量化し、大容量エラーを完全防止
+    const CHUNK_SIZE = 100 * 1024; // 1パーツあたり100KB分割
+
+    // 近すぎる連続座標を自動で間引いてデータサイズを数分の一にする関数
+    function simplifyPoints(points, minDistanceMeters = 3) {
+      if (!points || points.length <= 2) return points;
+      let simplified = [points[0]];
+      let lastPoint = points[0];
+
+      for (let i = 1; i < points.length - 1; i++) {
+        let p = points[i];
+        let latlng = L.latLng(p.lat || p[0], p.lng || p[1]);
+        let lastLatlng = L.latLng(lastPoint.lat || lastPoint[0], lastPoint.lng || lastPoint[1]);
+        
+        if (latlng.distanceTo(lastLatlng) >= minDistanceMeters) {
+          simplified.push(p);
+          lastPoint = p;
+        }
+      }
+      simplified.push(points[points.length - 1]);
+      return simplified;
+    }
 
     async function dbGetAllWorks() {
       try {
@@ -515,10 +535,14 @@
       let title = isAnonymous ? '名無しの作品集' : titleInput;
       let tags = tagsInput ? tagsInput.split(',').map(t => t.trim()).filter(Boolean) : [];
 
-      let optimizedLines = lines.map(l => ({
-        ...l,
-        points: l.points.map(p => [Number(p.lat.toFixed(5)), Number(p.lng.toFixed(5))])
-      }));
+      // 共有時に自動で不要な座標を間引き（軽量化）してサイズを削減
+      let optimizedLines = lines.map(l => {
+        let simplified = simplifyPoints(l.points, 3); // 3メートル以内の細かい連続点を最適化
+        return {
+          ...l,
+          points: simplified.map(p => [Number((p.lat || p[0]).toFixed(5)), Number((p.lng || p[1]).toFixed(5))])
+        };
+      });
 
       let optimizedStations = stations.map(s => ({
         id: s.id,
