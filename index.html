@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>電車内表示器エディタ v4.35 (駅クリック仕様修正版)</title>
+  <title>電車内表示器エディタ v4.48 (種別個別ビュー連動版)</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -61,7 +61,11 @@
     .station-marker {
       width: 14px; height: 14px; border-radius: 50%; background: #007acc; border: 2px solid #fff; box-shadow: 0 0 4px rgba(0,0,0,0.5); cursor: pointer;
     }
-    .station-marker.limited { background: #ff6600; border-color: #ffff00; box-shadow: 0 0 6px #ff6600; }
+    .station-marker.stop { background: #ff6600; border-color: #ffff00; }
+    .station-marker.pass { background: #555555; border-color: #888; }
+    .station-marker.no-entry { background: #d9534f; border-color: #fff; box-shadow: 0 0 6px #d9534f; }
+    .station-marker.other-no-stop { background: #6f42c1; border-color: #fff; }
+    .station-marker.other-stop { background: #007bff; border-color: #fff; }
     .station-marker.hub { background: #20c997; border-color: #fff; box-shadow: 0 0 8px #20c997; width: 18px; height: 18px; margin-left: -2px; margin-top: -2px; }
 
     .train-marker {
@@ -119,13 +123,13 @@
         <option value="station">🚉 駅配置</option>
         <option value="transfer">🔄 乗換統合 (代表駅化)</option>
         <option value="start">🟢 始点設定</option>
-        <option value="via">🟨 経由地設定</option>
+        <option value="via">🟨 経由地設定 (任意)</option>
         <option value="end">🔴 終点設定</option>
-        <option value="express-config">⚡ 速達種別停車駅設定</option>
+        <option value="express-config">⚡ 種別ごとの停車・通過設定 (クリック切替)</option>
       </select>
     </div>
 
-    <div id="key-guide-box" class="key-guide-box"><span>💡 【地図移動】マウスドラッグで地図を自由に移動できます。</span></div>
+    <div id="key-guide-box" class="key-guide-box"><span>💡 【地図移動】マウスドラッグで地図を自由に移動できます。（駅クリックで駅名変更）</span></div>
 
     <button class="header-btn plan" onclick="startPlanMode()">📐 新規計画線</button>
     <button class="header-btn success" id="finish-plan-btn" style="display:none; background:#20c997;" onclick="finishPlanLine()">📌 計画線・延長確定</button>
@@ -161,10 +165,13 @@
     <div id="sidebar">
       <div class="panel">
         <h3>
-          ⚡ 速達種別管理 (各停は固定・削除不可)
+          ⚡ 種別ごとの停車設定 (個別フォーカス)
           <button onclick="addNewExpressType()" style="width:auto; padding:2px 6px; font-size:11px;">➕ 種別追加</button>
         </h3>
-        <div id="express-list-container" style="max-height: 120px; overflow-y: auto;">
+        <div style="font-size: 10px; color: #aaa; margin-bottom: 6px; line-height: 1.3;">
+          選択中の種別の停車・通過設定のみがマップ上に反映されます。他の種別は折りたたまれます。
+        </div>
+        <div id="express-list-container" style="max-height: 200px; overflow-y: auto;">
           <p style="font-size: 11px; color:#888;">速達種別がありません</p>
         </div>
       </div>
@@ -199,7 +206,7 @@
         <div id="train-editor-content">
           <p>選択中列車: <b id="active-train-title" style="color:#00aaff">列車 1</b></p>
           <p>始点: <span id="start-name" style="color:#00ff66">未設定</span></p>
-          <p>経由: <span id="via-names" style="color:#ffcc00">なし</span> <button onclick="clearViaStations()" style="width:auto; padding:2px 5px; font-size:10px;">クリア</button></p>
+          <p>経由 (任意): <span id="via-names" style="color:#ffcc00">なし</span> <button onclick="clearViaStations()" style="width:auto; padding:2px 5px; font-size:10px;">クリア</button></p>
           <p>終点: <span id="end-name" style="color:#ff4444">未設定</span></p>
           
           <div style="margin-top: 5px;">
@@ -221,18 +228,18 @@
       </div>
 
       <div class="panel">
-        <h3>📅 ダイヤ（時刻表）</h3>
+        <h3>📅 ダイヤ（時刻表・探索制御）</h3>
         <div style="display:flex; gap:5px;">
           <div style="flex:1;">
             <label style="font-size:11px;">始点発車時刻:</label>
             <input type="time" id="timetable-start-time" value="08:00">
           </div>
           <div style="flex:1;">
-            <label style="font-size:11px;">駅間走行 (秒):</label>
+            <label style="font-size:11px;">基準駅間走行 (秒):</label>
             <input type="number" id="default-travel-sec" value="60" min="10">
           </div>
         </div>
-        <button onclick="generateTimetableForActiveTrain()" style="background:#17a2b8;">🔄 この列車のダイヤ生成</button>
+        <button onclick="generateTimetableForActiveTrain()" style="background:#17a2b8;">🔄 ダイヤ生成 (迂回・通過判定付)</button>
         
         <div style="max-height: 90px; overflow-y: auto; margin-top: 5px;">
           <table class="timetable-table">
@@ -369,11 +376,11 @@
   </div>
 
   <script>
-    // --- 駅クリック仕様修正版エディタ (v4.35) ---
+    // --- 種別個別ビュー連動版エディタ (v4.48) ---
 
     localforage.config({
-      name: 'TrainEditorApp_RiasCoast_v21',
-      storeName: 'works_rias_coast_v21',
+      name: 'TrainEditorApp_RiasCoast_v23',
+      storeName: 'works_rias_coast_v23',
       size: 50 * 1024 * 1024
     });
 
@@ -487,7 +494,7 @@
     let currentCaptureMode = 'deformed';
     let currentZoomScale = 1.0, panX = 0, panY = 0, isPanning = false, startPanX = 0, startPanY = 0;
 
-    let testRunState = { isRunning: false, timer: null, fullRoutePath: [], currentIndex: 0 };
+    let testRunState = { isRunning: false, timer: null, segments: [], currentSegIdx: 0, currentSegDist: 0, stopTimer: 0 };
     let trimTargetLineId = null;
     let transferFirstStation = null;
 
@@ -496,14 +503,17 @@
     function updateKeyGuide(mode) {
       const box = document.getElementById('key-guide-box');
       let guideText = "";
+      let activeExp = expressTypes.find(e => e.id === activeExpressConfigId);
+      let expName = activeExp ? activeExp.name : '各駅停車';
+
       switch (mode) {
         case 'pan': guideText = "💡 【地図移動】マウスドラッグで地図を自由に移動できます。（駅クリックで駅名変更）"; break;
         case 'plan': guideText = "💡 【計画線・延長モード】ドラッグで点設置 ｜ [Shift]キー: ロック切替"; break;
-        case 'express-config': guideText = "⚡ 【速達種別停車駅設定】サイドバーで種別を選択し、マップ上の駅を左クリックして停車/通過を切替！"; break;
+        case 'express-config': guideText = `⚡ 【${expName} の停車・通過設定】マップ上の駅をクリックすると、この種別専用のステータスが切り替わります！`; break;
         case 'station': guideText = "💡 【駅配置】クリックで駅配置"; break;
         case 'transfer': guideText = "🔄 【乗換統合 (代表駅化)】統合したい2つの駅を順番にクリックしてください！"; break;
         case 'start': guideText = "🟢 【始点設定】マップ上の駅をクリックして列車の始点に設定"; break;
-        case 'via': guideText = "🟨 【経由地設定】マップ上の駅をクリックして経由地に追加"; break;
+        case 'via': guideText = "🟨 【経由地設定】(任意) マップ上の駅をクリックして経由地に追加"; break;
         case 'end': guideText = "🔴 【終点設定】マップ上の駅をクリックして列車の終点に設定"; break;
         default: guideText = "💡 モードに応じた操作を行います。"; break;
       }
@@ -540,12 +550,14 @@
           if (dB < minDistB) { minDistB = dB; idxB = i; }
         }
 
-        if (minDistA < 200 && minDistB < 200) {
+        if (minDistA < 500 && minDistB < 500) {
+          let pts = [];
           if (idxA < idxB) {
-            return line.points.slice(idxA, idxB + 1);
+            pts = line.points.slice(idxA, idxB + 1);
           } else {
-            return line.points.slice(idxB, idxA + 1).reverse();
+            pts = line.points.slice(idxB, idxA + 1).reverse();
           }
+          return pts.map(p => L.latLng(p.lat || p[0], p.lng || p[1]));
         }
       }
       return [stA.latlng, stB.latlng];
@@ -566,32 +578,57 @@
         return;
       }
 
-      let routeStations = [t.startStation, ...t.viaStations, t.endStation];
-      if (t.expressName !== '各駅停車') {
-        let expType = expressTypes.find(e => e.name === t.expressName);
-        if (expType && expressStops[expType.id]) {
-          let allowedStops = expressStops[expType.id];
-          routeStations = routeStations.filter((st, idx) => {
-            if (idx === 0 || idx === routeStations.length - 1) return true;
-            return !!allowedStops[st.id];
-          });
+      let segments = [];
+      let timetable = t.timetable;
+
+      for (let i = 0; i < timetable.length - 1; i++) {
+        let fromSt = timetable[i].station;
+        let toSt = timetable[i+1].station;
+        let rawPoints = findLineSegmentBetweenStations(fromSt, toSt);
+
+        let subDistances = [0];
+        let totalDist = 0;
+        for (let j = 0; j < rawPoints.length - 1; j++) {
+          let d = rawPoints[j].distanceTo(rawPoints[j+1]);
+          totalDist += d;
+          subDistances.push(totalDist);
         }
+
+        let curvaturePenalty = 1.0;
+        for (let j = 1; j < rawPoints.length - 1; j++) {
+          let p0 = rawPoints[j-1], p1 = rawPoints[j], p2 = rawPoints[j+1];
+          let v1 = { x: p1.lng - p0.lng, y: p1.lat - p0.lat };
+          let v2 = { x: p2.lng - p1.lng, y: p2.lat - p1.lat };
+          let dot = v1.x * v2.x + v1.y * v2.y;
+          let l1 = Math.sqrt(v1.x*v1.x + v1.y*v1.y), l2 = Math.sqrt(v2.x*v2.x + v2.y*v2.y);
+          if (l1 > 0 && l2 > 0) {
+            let cosTh = Math.max(-1, Math.min(1, dot / (l1 * l2)));
+            if (cosTh < 0.95) curvaturePenalty += 0.05;
+          }
+        }
+
+        let maxSpeedMps = ((t.speedKmH || 60) * 1000) / 3600 / curvaturePenalty;
+        
+        segments.push({
+          fromStation: fromSt,
+          toStation: toSt,
+          points: rawPoints,
+          subDistances: subDistances,
+          totalDistance: totalDist || 1,
+          maxSpeed: maxSpeedMps,
+          stopTime: (i < timetable.length - 2) ? (t.stopTimeSec || 3) * 20 : 0
+        });
       }
 
-      let fullPath = [];
-      for (let i = 0; i < routeStations.length - 1; i++) {
-        let segPoints = findLineSegmentBetweenStations(routeStations[i], routeStations[i+1]);
-        if (i > 0) segPoints.shift();
-        fullPath = fullPath.concat(segPoints);
-      }
-
-      if (fullPath.length < 2) {
-        alert('有効な線路ルートが見つかりませんでした。駅が路線上に正しく配置されているか確認してください。');
+      if (segments.length === 0) {
+        alert('有効な走行セグメントが見つかりませんでした。');
         return;
       }
 
-      testRunState.fullRoutePath = fullPath;
-      testRunState.currentIndex = 0;
+      testRunState.segments = segments;
+      testRunState.currentSegIdx = 0;
+      testRunState.currentSegDist = 0;
+      testRunState.stopTimer = 0;
       testRunState.isRunning = true;
 
       const btn = document.getElementById('test-run-btn');
@@ -599,8 +636,9 @@
       btn.style.background = '#d9534f';
       btn.style.color = '#fff';
 
+      let initPt = segments[0].points[0];
       if (!t.marker) {
-        t.marker = L.marker(testRunState.fullRoutePath[0], {
+        t.marker = L.marker(initPt, {
           icon: L.divIcon({
             className: 'custom-train-icon',
             html: `<div class="train-marker" title="${t.name}"></div>`,
@@ -608,30 +646,89 @@
           })
         }).addTo(map);
       } else {
-        t.marker.setLatLng(testRunState.fullRoutePath[0]);
+        t.marker.setLatLng(initPt);
         t.marker.addTo(map);
       }
 
-      let totalPoints = testRunState.fullRoutePath.length;
       testRunState.timer = setInterval(() => {
         if (!testRunState.isRunning) return;
 
-        let pt = testRunState.fullRoutePath[testRunState.currentIndex];
-        t.marker.setLatLng(pt);
+        let seg = testRunState.segments[testRunState.currentSegIdx];
+
+        if (testRunState.stopTimer > 0) {
+          testRunState.stopTimer--;
+          if (testRunState.stopTimer === 0) {
+            testRunState.currentSegIdx++;
+            testRunState.currentSegDist = 0;
+            
+            if (testRunState.currentSegIdx >= testRunState.segments.length) {
+              stopTestRun();
+              alert('試運転が完了しました！');
+            }
+          }
+          return;
+        }
+
+        let d = testRunState.currentSegDist;
+        let rem = seg.totalDistance - d;
+        let accelDist = Math.min(seg.totalDistance * 0.25, 200); 
+        let decelDist = Math.min(seg.totalDistance * 0.25, 200); 
+
+        let currentSpeed = seg.maxSpeed;
+        if (d < accelDist) {
+          currentSpeed *= Math.max(0.05, d / accelDist);
+        } else if (rem < decelDist) {
+          currentSpeed *= Math.max(0.05, rem / decelDist);
+        }
+        currentSpeed = Math.max(currentSpeed, 1.5);
+
+        let stepDist = currentSpeed * 0.05;
+        testRunState.currentSegDist += stepDist;
+
+        if (testRunState.currentSegDist >= seg.totalDistance) {
+          testRunState.currentSegDist = seg.totalDistance;
+          let pt = seg.points[seg.points.length - 1];
+          t.marker.setLatLng(pt);
+          if (isTracking) map.panTo(pt, { animate: true, duration: 0.05 });
+
+          if (seg.stopTime > 0) {
+            testRunState.stopTimer = seg.stopTime;
+          } else {
+            testRunState.currentSegIdx++;
+            testRunState.currentSegDist = 0;
+            if (testRunState.currentSegIdx >= testRunState.segments.length) {
+              stopTestRun();
+              alert('試運転が完了しました！');
+            }
+          }
+          return;
+        }
+
+        let targetDist = testRunState.currentSegDist;
+        let pIdx = 0;
+        for (let i = 0; i < seg.subDistances.length - 1; i++) {
+          if (targetDist >= seg.subDistances[i] && targetDist <= seg.subDistances[i+1]) {
+            pIdx = i;
+            break;
+          }
+        }
+
+        let dStart = seg.subDistances[pIdx];
+        let dEnd = seg.subDistances[pIdx+1];
+        let ratio = (dEnd - dStart > 0) ? (targetDist - dStart) / (dEnd - dStart) : 0;
+
+        let ptA = seg.points[pIdx];
+        let ptB = seg.points[pIdx+1];
+        let curLat = ptA.lat + (ptB.lat - ptA.lat) * ratio;
+        let curLng = ptA.lng + (ptB.lng - ptA.lng) * ratio;
+        let currentLatLng = L.latLng(curLat, curLng);
+
+        t.marker.setLatLng(currentLatLng);
         if (isTracking) {
-          map.panTo(pt, { animate: true, duration: 0.05 });
+          map.panTo(currentLatLng, { animate: true, duration: 0.05 });
         }
 
-        let progress = testRunState.currentIndex / totalPoints;
-        let speedFactor = Math.sin(progress * Math.PI) * 0.8 + 0.3;
-        let stepIncrement = Math.max(1, Math.floor(2 * speedFactor));
-
-        testRunState.currentIndex += stepIncrement;
-        if (testRunState.currentIndex >= totalPoints) {
-          stopTestRun();
-          alert('試運転が完了しました！');
-        }
-      }, 40);
+      }, 50);
     }
 
     function stopTestRun() {
@@ -691,7 +788,8 @@
           name: s.name,
           latlng: [Number(s.latlng.lat.toFixed(5)), Number(s.latlng.lng.toFixed(5))],
           isHub: s.isHub || false,
-          mergedStationIds: s.mergedStationIds || []
+          mergedStationIds: s.mergedStationIds || [],
+          connectedLineIds: s.connectedLineIds || []
         }));
 
         let workData = {
@@ -898,9 +996,9 @@
       if (data.stations) {
         data.stations.forEach(s => {
           const latlng = Array.isArray(s.latlng) ? L.latLng(s.latlng[0], s.latlng[1]) : s.latlng;
-          const marker = L.marker(latlng, { icon: createStationMarkerIcon('各駅停車', s.isHub), draggable: true }).addTo(map);
+          const marker = L.marker(latlng, { icon: createStationMarkerIcon('各駅停車', s.isHub, 'stop'), draggable: true }).addTo(map);
           marker.bindTooltip(s.name, { permanent: true, direction: 'top' });
-          let newSt = { id: s.id || (Date.now() + Math.random()), name: s.name, marker, latlng: marker.getLatLng(), isHub: s.isHub || false, mergedStationIds: s.mergedStationIds || [] };
+          let newSt = { id: s.id || (Date.now() + Math.random()), name: s.name, marker, latlng: marker.getLatLng(), isHub: s.isHub || false, mergedStationIds: s.mergedStationIds || [], connectedLineIds: s.connectedLineIds || [] };
           stations.push(newSt);
           marker.on('click', (evt) => handleStationClick(evt, newSt));
         });
@@ -932,7 +1030,8 @@
         name: s.name,
         latlng: [Number(s.latlng.lat.toFixed(5)), Number(s.latlng.lng.toFixed(5))],
         isHub: s.isHub || false,
-        mergedStationIds: s.mergedStationIds || []
+        mergedStationIds: s.mergedStationIds || [],
+        connectedLineIds: s.connectedLineIds || []
       }));
 
       const data = {
@@ -994,9 +1093,9 @@
             if (data.stations) {
               data.stations.forEach(s => {
                 const latlng = Array.isArray(s.latlng) ? L.latLng(s.latlng[0], s.latlng[1]) : s.latlng;
-                const marker = L.marker(latlng, { icon: createStationMarkerIcon('各駅停車', s.isHub), draggable: true }).addTo(map);
+                const marker = L.marker(latlng, { icon: createStationMarkerIcon('各駅停車', s.isHub, 'stop'), draggable: true }).addTo(map);
                 marker.bindTooltip(s.name, { permanent: true, direction: 'top' });
-                let newSt = { id: s.id || (Date.now() + Math.random()), name: s.name, marker, latlng: marker.getLatLng(), isHub: s.isHub || false, mergedStationIds: s.mergedStationIds || [] };
+                let newSt = { id: s.id || (Date.now() + Math.random()), name: s.name, marker, latlng: marker.getLatLng(), isHub: s.isHub || false, mergedStationIds: s.mergedStationIds || [], connectedLineIds: s.connectedLineIds || [] };
                 stations.push(newSt);
                 marker.on('click', (evt) => handleStationClick(evt, newSt));
               });
@@ -1102,7 +1201,7 @@
         let sortedStations = stations.map(st => {
           let match = getNearestLineAndIndexOnLine(st.latlng, lineObj);
           return { st, idx: match.index, dist: match.dist };
-        }).filter(item => item.dist < 150).sort((a, b) => a.idx - b.idx).map(item => item.st);
+        }).filter(item => item.dist < 500).sort((a, b) => a.idx - b.idx).map(item => item.st);
 
         if (sortedStations.length < 2) return;
         const folder = folders.find(f => f.id === lineObj.folderId);
@@ -1156,11 +1255,22 @@
     let activeExpressConfigId = null;
 
     function addNewExpressType() {
-      const name = prompt('速達種別名を入力してください (例: 特急、快速):', `種別 ${expressTypes.length}`);
+      const name = prompt('速達種別名を入力してください (例: 特急A, 快速B):', `種別 ${expressTypes.length}`);
       if (!name) return;
       if (name === '各駅停車') return alert('「各駅停車」は標準で固定されています。');
-      expressTypes.push({ id: 'exp_' + Date.now(), name, color: '#ff6600', isFixed: false });
+      
+      let newId = 'exp_' + Date.now();
+      let newExp = { id: newId, name, color: '#ff6600', isFixed: false };
+      expressTypes.push(newExp);
+      
+      expressStops[newId] = {};
+      stations.forEach(st => {
+        expressStops[newId][st.id] = 'stop'; // デフォルト全駅停車
+      });
+
       sortExpressTypes();
+      // 新規作成された種別を自動的に選択状態（最前面＆マップ連動）にする
+      selectExpressForConfig(newId);
     }
 
     function updateExpressConfig(id, newName, newColor) {
@@ -1173,6 +1283,7 @@
       if (newName !== undefined) e.name = newName;
       if (newColor !== undefined) e.color = newColor;
       sortExpressTypes();
+      updateAllStationsConnection();
     }
 
     function deleteExpressType(id) {
@@ -1181,20 +1292,27 @@
         alert('「各駅停車」は削除できません。');
         return;
       }
-      if (!confirm('この速達種別を削除しますか？')) return;
+      if (!confirm(`速達種別「${e.name}」を削除しますか？`)) return;
       expressTypes = expressTypes.filter(item => item.id !== id);
       delete expressStops[id];
+      if (activeExpressConfigId === id) activeExpressConfigId = null;
       renderExpressList();
+      updateAllStationsConnection();
     }
 
     function selectExpressForConfig(id) {
       activeExpressConfigId = id;
       setMode('express-config');
-      renderExpressList();
+      renderExpressList(); 
+      updateAllStationsConnection(); // マップ上の駅アイコン・吹き出しをこの選択中種別の設定に完全に切り替える
+      
       let e = expressTypes.find(item => item.id === id);
-      alert(`「${e.name}」の停車駅設定モードになりました。マップ上の駅を左クリックして停車/通過を切り替えてください。`);
+      if (e) {
+        alert(`⚡ 【${e.name}】の個別設定モードに切り替えました。\nマップ上の駅をクリックすると、「${e.name}」が停車するか通過するかを個別に変更できます。`);
+      }
     }
 
+    // --- 各種別のステータスを個別フォーカスして表示・切り替えるレンダリング制御 ---
     function renderExpressList() {
       const container = document.getElementById('express-list-container');
       container.innerHTML = '';
@@ -1202,17 +1320,62 @@
         container.innerHTML = '<p style="font-size: 11px; color:#888;">速達種別がありません</p>';
         return;
       }
+
+      if (!activeExpressConfigId || !expressTypes.some(e => e.id === activeExpressConfigId)) {
+        activeExpressConfigId = expressTypes[0].id;
+      }
+
       expressTypes.forEach(e => {
         const item = document.createElement('div');
         item.className = 'express-item';
         let isSelected = activeExpressConfigId === e.id;
-        item.style.border = isSelected ? '1px solid #00ffcc' : '1px solid transparent';
-        item.innerHTML = `
-          <input type="color" class="folder-color-input" value="${e.color}" onchange="updateExpressConfig('${e.id}', undefined, this.value)">
-          <input type="text" value="${e.name}" ${e.isFixed ? 'disabled style="background:#222; color:#aaa; margin:0; padding:2px 4px; font-size:11px; width:80px;"' : 'style="margin:0; padding:2px 4px; font-size:11px; width:80px;"'} onchange="updateExpressConfig('${e.id}', this.value, undefined)">
-          <button onclick="selectExpressForConfig('${e.id}')" style="font-size:10px; padding:2px 4px; background:${isSelected ? '#20c997' : '#007acc'};">🎯 停車駅</button>
-          ${e.isFixed ? '<span style="font-size:9px; color:#888; padding:2px 2px;">[固定]</span>' : `<button onclick="deleteExpressType('${e.id}')" style="font-size:10px; padding:2px 4px; background:#dc3545;">🗑️</button>`}
-        `;
+
+        if (isSelected) {
+          // --- 【編集中・選択中】最前面に詳細・停車設定プレビューを表示 ---
+          item.style.background = '#252a34';
+          item.style.border = '2px solid #00ffcc';
+          item.style.padding = '8px';
+          item.style.marginBottom = '8px';
+          item.style.flexDirection = 'column';
+          item.style.alignItems = 'stretch';
+          item.style.gap = '6px';
+
+          // 現在選択中の種別における「停車駅数 / 全駅数」を計算して表示
+          let totalSts = stations.length;
+          let stopCount = 0;
+          if (!e.isFixed && expressStops[e.id]) {
+            stopCount = stations.filter(st => (expressStops[e.id][st.id] || 'stop') === 'stop').length;
+          } else if (e.isFixed) {
+            stopCount = totalSts;
+          }
+
+          item.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span style="font-size:12px; color:#00ffcc; font-weight:bold;">✨ 表示中: ${e.name} の設定</span>
+              <span style="font-size:10px; color:#ffcc00; background:#111; padding:2px 6px; border-radius:3px;">停車: ${stopCount} / ${totalSts}駅</span>
+            </div>
+            <div style="display:flex; gap:6px; align-items:center;">
+              <input type="color" class="folder-color-input" value="${e.color}" onchange="updateExpressConfig('${e.id}', undefined, this.value)">
+              <input type="text" value="${e.name}" ${e.isFixed ? 'disabled style="background:#222; color:#aaa; margin:0; padding:4px; font-size:11px; flex:1;"' : 'style="margin:0; padding:4px; font-size:11px; flex:1;"'} onchange="updateExpressConfig('${e.id}', this.value, undefined)">
+              ${e.isFixed ? '<span style="font-size:9px; color:#888;">[固定]</span>' : `<button onclick="deleteExpressType('${e.id}')" style="width:auto; font-size:10px; padding:4px 8px; background:#dc3545;">🗑️ 削除</button>`}
+            </div>
+            <div style="font-size:10px; color:#00ffcc; background:#181818; padding:6px; border-radius:3px; line-height:1.4;">
+              🎯 <b>【${e.name}】の個別表示中</b><br>マップ上の駅の色は、この種別が<b>「停車(オレンジ)」</b>するか<b>「通過(グレー/その他)」</b>するかを表しています。クリックして切り替えてください。
+            </div>
+          `;
+        } else {
+          // --- 【その他】他の種別はいったんしまう（コンパクトに折りたたみ） ---
+          item.style.background = '#1e1e1e';
+          item.style.border = '1px solid #444';
+          item.style.padding = '4px 6px';
+          item.style.opacity = '0.6';
+
+          item.innerHTML = `
+            <span class="line-color-badge" style="background:${e.color}"></span>
+            <span style="flex:1; font-size:11px; color:#ccc;">${e.name} の設定を見る</span>
+            <button onclick="selectExpressForConfig('${e.id}')" style="font-size:10px; padding:2px 8px; background:#007acc; font-weight:bold;">🔍 表示切替</button>
+          `;
+        }
         container.appendChild(item);
       });
     }
@@ -1278,6 +1441,8 @@
         lineObj.borderPolyline = L.polyline(lineObj.points, { color: borderColor, weight: 9, opacity: 0.9 }).addTo(map);
       }
       lineObj.polyline = L.polyline(lineObj.points, { color: activeColor, weight: weight, dashArray: dashArray }).addTo(map);
+
+      updateAllStationsConnection();
     }
 
     function finishCurrentLine() {
@@ -1312,6 +1477,7 @@
       if (l.polyline) map.removeLayer(l.polyline);
       if (l.borderPolyline) map.removeLayer(l.borderPolyline);
       lines = lines.filter(item => item.id !== lineId);
+      updateAllStationsConnection();
       renderLineList();
       alert(`路線「${l.name}」を削除しました。`);
     }
@@ -1491,7 +1657,6 @@
       if (l) l.name = newName;
     }
 
-    // --- 計画線モードのShiftキーロック制御 ---
     const mapContainer = document.getElementById('map');
 
     window.addEventListener('keydown', (e) => {
@@ -1541,14 +1706,54 @@
       updateKeyGuide(mode);
     }
 
-    function createStationMarkerIcon(expressTypeName = '', isHub = false) {
+    function createStationMarkerIcon(expressTypeName = '', isHub = false, status = 'stop') {
       let isSpecial = expressTypeName && expressTypeName !== '各駅停車';
-      let bgColor = isHub ? '#20c997' : (isSpecial ? '#ff6600' : '#007acc');
+      let bgColor = '#007acc';
+      if (isHub) bgColor = '#20c997';
+      else if (isSpecial) {
+        if (status === 'stop') bgColor = '#ff6600';     // 停車 (オレンジ)
+        else if (status === 'pass') bgColor = '#555555'; // 通過 (グレー)
+        else if (status === 'no-entry') bgColor = '#d9534f'; // 通過すら禁止 (赤)
+        else if (status === 'other-no-stop') bgColor = '#6f42c1'; 
+        else if (status === 'other-stop') bgColor = '#007bff'; 
+      }
       let size = isHub ? 18 : 14;
       return L.divIcon({
         className: 'custom-station-icon',
-        html: `<div class="station-marker ${isHub ? 'hub' : ''} ${isSpecial ? 'limited' : ''}" style="background:${bgColor};"></div>`,
+        html: `<div class="station-marker ${isHub ? 'hub' : ''} ${status === 'no-entry' ? 'no-entry' : ''}" style="background:${bgColor};"></div>`,
         iconSize: [size, size], iconAnchor: [size/2, size/2]
+      });
+    }
+
+    function updateAllStationsConnection() {
+      stations.forEach(st => {
+        let connected = [];
+        lines.forEach(l => {
+          let m = getNearestLineAndIndexOnLine(st.latlng, l);
+          if (m.dist < 500) {
+            connected.push(l.id);
+          }
+        });
+        st.connectedLineIds = connected;
+
+        if (st.connectedLineIds.length >= 2) {
+          st.isHub = true;
+        }
+
+        // --- 現在「表示中・選択中」の速達種別の設定のみをマップに反映 ---
+        let currentExp = expressTypes.find(e => e.id === activeExpressConfigId);
+        let expName = currentExp ? currentExp.name : '各駅停車';
+        let stStatus = (currentExp && !currentExp.isFixed && expressStops[currentExp.id]) ? (expressStops[currentExp.id][st.id] || 'stop') : 'stop';
+
+        st.marker.setIcon(createStationMarkerIcon(expName, st.isHub, stStatus));
+        
+        let statusLabels = {
+          'stop': '停車', 'pass': '通過', 'no-entry': '進入禁止', 'other-no-stop': '他停禁止', 'other-stop': '他停許可'
+        };
+        let statusText = currentExp && !currentExp.isFixed ? ` (${expName}: ${statusLabels[stStatus] || stStatus})` : '';
+        let connLinesNames = lines.filter(l => st.connectedLineIds.includes(l.id)).map(l => l.name).join(', ');
+        let tooltipText = st.isHub ? `${st.name}${statusText} (乗換: ${connLinesNames || '複数路線'})` : `${st.name}${statusText}`;
+        st.marker.bindTooltip(tooltipText, { permanent: true, direction: 'top' });
       });
     }
 
@@ -1556,11 +1761,21 @@
       if (currentMode === 'station') {
         const name = prompt('駅名を入力してください:', `あおぞら駅${stations.length + 1}`);
         if (!name) return;
-        const marker = L.marker(e.latlng, { icon: createStationMarkerIcon('各駅停車', false), draggable: true }).addTo(map);
+        const marker = L.marker(e.latlng, { icon: createStationMarkerIcon('各駅停車', false, 'stop'), draggable: true }).addTo(map);
         marker.bindTooltip(name, { permanent: true, direction: 'top' });
-        const st = { id: Date.now() + Math.random(), name, marker, latlng: e.latlng, isHub: false, mergedStationIds: [] };
+        const st = { id: Date.now() + Math.random(), name, marker, latlng: e.latlng, isHub: false, mergedStationIds: [], connectedLineIds: [] };
         stations.push(st);
+        
+        // 全ての種別に対して新規駅のデフォルトステータスを「stop」として追加
+        expressTypes.forEach(et => {
+          if (!et.isFixed) {
+            if (!expressStops[et.id]) expressStops[et.id] = {};
+            expressStops[et.id][st.id] = 'stop';
+          }
+        });
+
         marker.on('click', (evt) => handleStationClick(evt, st));
+        updateAllStationsConnection();
       }
     });
 
@@ -1581,7 +1796,6 @@
     function handleStationClick(evt, st) {
       if (evt) L.DomEvent.stopPropagation(evt);
       
-      // 1. 速達種別設定モードのとき：クリックで停車/通過を切り替えて色を変える
       if (currentMode === 'express-config') {
         if (!activeExpressConfigId) {
           alert('先にサイドバーから設定する速達種別を選択してください。');
@@ -1589,25 +1803,33 @@
         }
         let exp = expressTypes.find(e => e.id === activeExpressConfigId);
         if (exp && exp.isFixed) {
-          alert('「各駅停車」は全駅停車固定のため、通過設定に変更することはできません。');
+          alert('「各駅停車」は全駅停車固定のため変更できません。');
           return;
         }
 
         if (!expressStops[activeExpressConfigId]) expressStops[activeExpressConfigId] = {};
-        let isStopped = !!expressStops[activeExpressConfigId][st.id];
-        isStopped = !isStopped;
-        expressStops[activeExpressConfigId][st.id] = isStopped;
+        let curStatus = expressStops[activeExpressConfigId][st.id] || 'stop';
+        
+        // ステータス循環切替 (停車 ➔ 通過 ➔ 通過すら禁止 ➔ ...)
+        let nextStatus = 'stop';
+        if (curStatus === 'stop') nextStatus = 'pass';
+        else if (curStatus === 'pass') nextStatus = 'no-entry';
+        else if (curStatus === 'no-entry') nextStatus = 'other-no-stop';
+        else if (curStatus === 'other-no-stop') nextStatus = 'other-stop';
+        else nextStatus = 'stop';
 
-        st.marker.setIcon(createStationMarkerIcon(isStopped ? exp.name : '各駅停車', st.isHub));
-        st.marker.bindTooltip(`${st.name} (${exp.name}: ${isStopped ? '停車' : '通過'})`, { permanent: true, direction: 'top' });
+        expressStops[activeExpressConfigId][st.id] = nextStatus;
+
+        // 即時反映と再描画
+        updateAllStationsConnection();
+        renderExpressList();
         return;
       }
 
-      // 2. 乗換統合（代表駅化）モードのとき
       if (currentMode === 'transfer') {
         if (!transferFirstStation) {
           transferFirstStation = st;
-          alert(`1つ目の駅「${st.name}」を選択しました。次に統合（代表駅化）するもう1つの駅をクリックしてください。`);
+          alert(`1つ目の駅「${st.name}」を選択しました。次に統合するもう1つの駅をクリックしてください。`);
         } else {
           let first = transferFirstStation;
           transferFirstStation = null;
@@ -1615,13 +1837,13 @@
             alert('同じ駅同士は統合できません。');
             return;
           }
-          let newName = prompt(`乗換統合（代表駅化）する駅名を入力してください:`, `${first.name}・${st.name}`);
+          let newName = prompt(`乗換統合する駅名を入力してください:`, `${first.name}・${st.name}`);
           if (!newName) return;
 
           st.name = newName;
           st.isHub = true;
           st.mergedStationIds.push(first.id);
-          st.marker.setIcon(createStationMarkerIcon('各駅停車', true));
+          st.marker.setIcon(createStationMarkerIcon('各駅停車', true, 'stop'));
           st.marker.bindTooltip(`${newName} (代表駅)`, { permanent: true, direction: 'top' });
 
           map.removeLayer(first.marker);
@@ -1633,19 +1855,19 @@
             t.viaStations = t.viaStations.map(s => s.id === first.id ? st : s);
           });
 
+          updateAllStationsConnection();
           alert(`駅を統合し、代表駅「${newName}」を作成しました！`);
         }
         return;
       }
 
-      // 3. 通常モード（地図移動）のとき：駅名変更 または 削除メニュー
       if (currentMode === 'pan') {
         let action = prompt(`駅「${st.name}」の操作:\n[1] 駅名を変更\n[2] 駅を削除\n[キャンセル] 何もしない`, "1");
         if (action === "1") {
           let newName = prompt("新しい駅名を入力してください:", st.name);
           if (newName) {
             st.name = newName;
-            st.marker.bindTooltip(newName, { permanent: true, direction: 'top' });
+            updateAllStationsConnection();
           }
         } else if (action === "2") {
           deleteStation(st.id);
@@ -1653,7 +1875,6 @@
         return;
       }
 
-      // 4. 列車ルート設定モードのとき（始点・経由・終点）
       if (currentMode === 'start') { getActiveTrain().startStation = st; document.getElementById('start-name').innerText = st.name; }
       else if (currentMode === 'end') { getActiveTrain().endStation = st; document.getElementById('end-name').innerText = st.name; }
       else if (currentMode === 'via') { getActiveTrain().viaStations.push(st); updateViaDisplay(); }
@@ -1661,7 +1882,7 @@
 
     function updateViaDisplay() {
       const t = getActiveTrain();
-      if (t) document.getElementById('via-names').innerText = t.viaStations.length === 0 ? 'なし' : t.viaStations.map(s => s.name).join(' → ');
+      if (t) document.getElementById('via-names').innerText = t.viaStations.length === 0 ? 'なし (自動経由)' : t.viaStations.map(s => s.name).join(' → ');
     }
 
     function clearViaStations() {
@@ -1707,22 +1928,145 @@
       t.stopTimeSec = parseInt(document.getElementById('stop-time').value, 10) || 3;
     }
 
+    function findAllPossibleRouteStations(startSt, endSt, viaSts, trainExpressName) {
+      let adj = {};
+      stations.forEach(s => { adj[s.id] = []; });
+
+      lines.forEach(lineObj => {
+        let lineSts = stations.filter(st => getNearestLineAndIndexOnLine(st.latlng, lineObj).dist < 500)
+          .sort((a, b) => getNearestLineAndIndexOnLine(a.latlng, lineObj).index - getNearestLineAndIndexOnLine(b.latlng, lineObj).index);
+        
+        for (let i = 0; i < lineSts.length - 1; i++) {
+          let u = lineSts[i].id, v = lineSts[i+1].id;
+          if (!adj[u].includes(v)) adj[u].push(v);
+          if (!adj[v].includes(u)) adj[v].push(u);
+        }
+      });
+
+      for (let i = 0; i < stations.length; i++) {
+        for (let j = i + 1; j < stations.length; j++) {
+          let s1 = stations[i], s2 = stations[j];
+          if (s1.latlng.distanceTo(s2.latlng) < 500) {
+            if (!adj[s1.id].includes(s2.id)) adj[s1.id].push(s2.id);
+            if (!adj[s2.id].includes(s1.id)) adj[s2.id].push(s1.id);
+          }
+        }
+      }
+
+      let stMap = {};
+      stations.forEach(s => { stMap[s.id] = s; });
+
+      let expType = expressTypes.find(e => e.name === trainExpressName);
+      let stopsConfig = (expType && expressStops[expType.id]) ? expressStops[expType.id] : {};
+
+      let allPaths = [];
+      function dfs(currId, targetId, visited, path) {
+        if (currId === targetId) {
+          allPaths.push([...path]);
+          return;
+        }
+        if (path.length > 40) return;
+        for (let nextId of (adj[currId] || [])) {
+          if (!visited.has(nextId)) {
+            let isTerminal = (nextId === targetId);
+            let status = stopsConfig[nextId] || 'stop';
+            if (!isTerminal && status === 'no-entry') continue;
+
+            visited.add(nextId);
+            path.push(stMap[nextId]);
+            dfs(nextId, targetId, visited, path);
+            path.pop();
+            visited.delete(nextId);
+          }
+        }
+      }
+
+      let visited = new Set([startSt.id]);
+      dfs(startSt.id, endSt.id, visited, [startSt]);
+      return allPaths;
+    }
+
+    function getFullRouteStationsForTrain(t) {
+      if (!t.startStation || !t.endStation) return [];
+
+      let candidatePaths = findAllPossibleRouteStations(t.startStation, t.endStation, t.viaStations, t.expressName);
+      let expType = expressTypes.find(e => e.name === t.expressName);
+      let stopsConfig = (expType && expressStops[expType.id]) ? expressStops[expType.id] : {};
+
+      let validPath = null;
+
+      for (let path of candidatePaths) {
+        let hasNoEntry = false;
+        for (let i = 0; i < path.length; i++) {
+          let st = path[i];
+          let isTerminal = (i === 0 || i === path.length - 1);
+          let status = stopsConfig[st.id] || 'stop';
+
+          if (!isTerminal && status === 'no-entry') {
+            hasNoEntry = true;
+            break;
+          }
+        }
+        if (!hasNoEntry) {
+          validPath = path;
+          break;
+        }
+      }
+
+      if (!validPath) {
+        return null;
+      }
+
+      return validPath;
+    }
+
     function generateTimetableForActiveTrain() {
       const t = getActiveTrain();
       if (!t || !t.startStation || !t.endStation) return alert('始点と終点を設定してください');
 
-      let routeStations = [t.startStation, ...t.viaStations, t.endStation];
+      let rawRouteStations = getFullRouteStationsForTrain(t);
       
-      if (t.expressName !== '各駅停車') {
-        let expType = expressTypes.find(e => e.name === t.expressName);
-        if (expType && expressStops[expType.id]) {
-          let allowedStops = expressStops[expType.id];
-          routeStations = routeStations.filter((st, idx) => {
-            if (idx === 0 || idx === routeStations.length - 1) return true;
-            return !!allowedStops[st.id];
-          });
-        }
+      if (!rawRouteStations) {
+        alert('❌ 【ルート探索失敗】\n選択された全てのルート上に「通過すら禁止（進入不可）」の駅が含まれているか、到達可能な迂回ルートが存在しません。');
+        return;
       }
+
+      let routeStations = [];
+      let expType = expressTypes.find(e => e.name === t.expressName);
+      let stopsConfig = (expType && expressStops[expType.id]) ? expressStops[expType.id] : {};
+
+      rawRouteStations.forEach((st, idx) => {
+        let isTerminal = (idx === 0 || idx === rawRouteStations.length - 1);
+        if (isTerminal) {
+          routeStations.push(st);
+          return;
+        }
+
+        let status = stopsConfig[st.id] || 'stop';
+
+        let forcedByOther = null;
+        for (let et of expressTypes) {
+          if (et.name === t.expressName) continue;
+          let otherConfig = expressStops[et.id] || {};
+          let otherSt = otherConfig[st.id];
+          if (otherSt === 'other-no-stop') { forcedByOther = 'pass'; break; }
+          if (otherSt === 'other-stop') { forcedByOther = 'stop'; break; }
+        }
+
+        let effectiveStatus = forcedByOther !== null ? forcedByOther : status;
+
+        if (t.expressName === '各駅停車') {
+          if (effectiveStatus === 'other-no-stop' || effectiveStatus === 'pass') {
+            // 通過
+          } else {
+            routeStations.push(st);
+          }
+        } else {
+          if (effectiveStatus === 'stop' || effectiveStatus === 'other-stop') {
+            routeStations.push(st);
+          }
+        }
+      });
 
       let tbody = document.getElementById('timetable-body');
       tbody.innerHTML = '';
@@ -1731,9 +2075,40 @@
       let currentTime = document.getElementById('timetable-start-time').value || '08:00';
       let [h, m] = currentTime.split(':').map(Number);
       let totalSec = h * 3600 + m * 60;
-      let travelSec = parseInt(document.getElementById('default-travel-sec').value, 10) || 60;
 
       routeStations.forEach((st, idx) => {
+        let travelSec = 60;
+        if (idx > 0) {
+          let prevSt = routeStations[idx - 1];
+          let segPoints = findLineSegmentBetweenStations(prevSt, st);
+          
+          let distMeters = 0;
+          let curvaturePenalty = 1.0;
+          for (let i = 0; i < segPoints.length - 1; i++) {
+            let p1 = segPoints[i], p2 = segPoints[i+1];
+            distMeters += p1.distanceTo(p2);
+
+            if (i > 0) {
+              let p0 = segPoints[i-1];
+              let v1 = { x: p1.lng - p0.lng, y: p1.lat - p0.lat };
+              let v2 = { x: p2.lng - p1.lng, y: p2.lat - p1.lat };
+              let dot = v1.x * v2.x + v1.y * v2.y;
+              let len1 = Math.sqrt(v1.x*v1.x + v1.y*v1.y);
+              let len2 = Math.sqrt(v2.x*v2.x + v2.y*v2.y);
+              if (len1 > 0 && len2 > 0) {
+                let cosTh = Math.max(-1, Math.min(1, dot / (len1 * len2)));
+                if (cosTh < 0.95) curvaturePenalty += 0.08;
+              }
+            }
+          }
+
+          let distKm = distMeters / 1000;
+          let speedKmH = t.speedKmH || 60;
+          let rawSec = (distKm / speedKmH) * 3600;
+          let accelDecelBuffer = 20;
+          travelSec = Math.max(30, Math.round((rawSec + accelDecelBuffer) * curvaturePenalty));
+        }
+
         let arrSec = idx === 0 ? totalSec : totalSec + travelSec;
         let depSec = arrSec + (idx === routeStations.length - 1 ? 0 : t.stopTimeSec);
         totalSec = depSec;
@@ -1748,7 +2123,7 @@
         tbody.appendChild(row);
       });
 
-      alert(`速達種別「${t.expressName}」のダイヤを生成しました（停車駅数: ${routeStations.length}駅）`);
+      alert(`物理演算ダイヤを生成しました（有効ルート探索完了 / 停車駅数: ${routeStations.length}駅）`);
       renderLEDPreview(t);
     }
 
@@ -1770,9 +2145,8 @@
       }
     }
 
-    // 初期化
     addNewTrain();
-    sortExpressTypes();
+    renderExpressList();
   </script>
 </body>
 </html>
