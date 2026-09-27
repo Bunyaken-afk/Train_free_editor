@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>電車内表示器エディタ v4.33 (区間修正・駅削除・路線削除完全復活版)</title>
+  <title>電車内表示器エディタ v4.35 (駅クリック仕様修正版)</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -62,6 +62,7 @@
       width: 14px; height: 14px; border-radius: 50%; background: #007acc; border: 2px solid #fff; box-shadow: 0 0 4px rgba(0,0,0,0.5); cursor: pointer;
     }
     .station-marker.limited { background: #ff6600; border-color: #ffff00; box-shadow: 0 0 6px #ff6600; }
+    .station-marker.hub { background: #20c997; border-color: #fff; box-shadow: 0 0 8px #20c997; width: 18px; height: 18px; margin-left: -2px; margin-top: -2px; }
 
     .train-marker {
       width: 18px; height: 18px; border-radius: 50%; background: #ffcc00; border: 2px solid #fff; box-shadow: 0 0 10px #ffcc00; z-index: 1500;
@@ -116,7 +117,7 @@
         <option value="pan">✋ 地図移動</option>
         <option value="plan">📐 計画線・延長モード</option>
         <option value="station">🚉 駅配置</option>
-        <option value="transfer">🔄 乗換統合</option>
+        <option value="transfer">🔄 乗換統合 (代表駅化)</option>
         <option value="start">🟢 始点設定</option>
         <option value="via">🟨 経由地設定</option>
         <option value="end">🔴 終点設定</option>
@@ -368,11 +369,11 @@
   </div>
 
   <script>
-    // --- 区間修正・駅削除・路線削除完全復活版エディタ (v4.33) ---
+    // --- 駅クリック仕様修正版エディタ (v4.35) ---
 
     localforage.config({
-      name: 'TrainEditorApp_RiasCoast_v19',
-      storeName: 'works_rias_coast_v19',
+      name: 'TrainEditorApp_RiasCoast_v21',
+      storeName: 'works_rias_coast_v21',
       size: 50 * 1024 * 1024
     });
 
@@ -488,6 +489,7 @@
 
     let testRunState = { isRunning: false, timer: null, fullRoutePath: [], currentIndex: 0 };
     let trimTargetLineId = null;
+    let transferFirstStation = null;
 
     const lineColors = ['#007acc', '#e6194B', '#3cb44b', '#ffe119', '#911eb4', '#f58231'];
 
@@ -495,11 +497,14 @@
       const box = document.getElementById('key-guide-box');
       let guideText = "";
       switch (mode) {
-        case 'pan': guideText = "💡 【地図移動】マウスドラッグで地図を自由に移動できます。"; break;
+        case 'pan': guideText = "💡 【地図移動】マウスドラッグで地図を自由に移動できます。（駅クリックで駅名変更）"; break;
         case 'plan': guideText = "💡 【計画線・延長モード】ドラッグで点設置 ｜ [Shift]キー: ロック切替"; break;
-        case 'express-config': guideText = "⚡ 【速達種別停車駅設定】サイドバーで種別を選択し、マップ上の駅をクリックして停車/通過を切替！"; break;
+        case 'express-config': guideText = "⚡ 【速達種別停車駅設定】サイドバーで種別を選択し、マップ上の駅を左クリックして停車/通過を切替！"; break;
         case 'station': guideText = "💡 【駅配置】クリックで駅配置"; break;
-        case 'transfer': guideText = "💡 【乗換統合】2つの駅を順にクリックして結ぶ。"; break;
+        case 'transfer': guideText = "🔄 【乗換統合 (代表駅化)】統合したい2つの駅を順番にクリックしてください！"; break;
+        case 'start': guideText = "🟢 【始点設定】マップ上の駅をクリックして列車の始点に設定"; break;
+        case 'via': guideText = "🟨 【経由地設定】マップ上の駅をクリックして経由地に追加"; break;
+        case 'end': guideText = "🔴 【終点設定】マップ上の駅をクリックして列車の終点に設定"; break;
         default: guideText = "💡 モードに応じた操作を行います。"; break;
       }
       box.innerHTML = `<span>${guideText}</span>`;
@@ -684,7 +689,9 @@
         let optimizedStations = stations.map(s => ({
           id: s.id,
           name: s.name,
-          latlng: [Number(s.latlng.lat.toFixed(5)), Number(s.latlng.lng.toFixed(5))]
+          latlng: [Number(s.latlng.lat.toFixed(5)), Number(s.latlng.lng.toFixed(5))],
+          isHub: s.isHub || false,
+          mergedStationIds: s.mergedStationIds || []
         }));
 
         let workData = {
@@ -891,9 +898,9 @@
       if (data.stations) {
         data.stations.forEach(s => {
           const latlng = Array.isArray(s.latlng) ? L.latLng(s.latlng[0], s.latlng[1]) : s.latlng;
-          const marker = L.marker(latlng, { icon: createStationMarkerIcon('各駅停車'), draggable: true }).addTo(map);
+          const marker = L.marker(latlng, { icon: createStationMarkerIcon('各駅停車', s.isHub), draggable: true }).addTo(map);
           marker.bindTooltip(s.name, { permanent: true, direction: 'top' });
-          let newSt = { id: Date.now() + Math.random(), name: s.name, marker, latlng: marker.getLatLng() };
+          let newSt = { id: s.id || (Date.now() + Math.random()), name: s.name, marker, latlng: marker.getLatLng(), isHub: s.isHub || false, mergedStationIds: s.mergedStationIds || [] };
           stations.push(newSt);
           marker.on('click', (evt) => handleStationClick(evt, newSt));
         });
@@ -923,7 +930,9 @@
       const optimizedStations = stations.map(s => ({
         id: s.id,
         name: s.name,
-        latlng: [Number(s.latlng.lat.toFixed(5)), Number(s.latlng.lng.toFixed(5))]
+        latlng: [Number(s.latlng.lat.toFixed(5)), Number(s.latlng.lng.toFixed(5))],
+        isHub: s.isHub || false,
+        mergedStationIds: s.mergedStationIds || []
       }));
 
       const data = {
@@ -985,9 +994,9 @@
             if (data.stations) {
               data.stations.forEach(s => {
                 const latlng = Array.isArray(s.latlng) ? L.latLng(s.latlng[0], s.latlng[1]) : s.latlng;
-                const marker = L.marker(latlng, { icon: createStationMarkerIcon('各駅停車'), draggable: true }).addTo(map);
+                const marker = L.marker(latlng, { icon: createStationMarkerIcon('各駅停車', s.isHub), draggable: true }).addTo(map);
                 marker.bindTooltip(s.name, { permanent: true, direction: 'top' });
-                let newSt = { id: Date.now() + Math.random(), name: s.name, marker, latlng: marker.getLatLng() };
+                let newSt = { id: s.id || (Date.now() + Math.random()), name: s.name, marker, latlng: marker.getLatLng(), isHub: s.isHub || false, mergedStationIds: s.mergedStationIds || [] };
                 stations.push(newSt);
                 marker.on('click', (evt) => handleStationClick(evt, newSt));
               });
@@ -1086,7 +1095,7 @@
       stations.forEach(st => {
         let x = margin + ((st.latlng.lng - minLng) / lngRange) * effW;
         let y = height - (margin + ((st.latlng.lat - minLat) / latRange) * effH);
-        stationPos[st.id] = { x, y, name: st.name };
+        stationPos[st.id] = { x, y, name: st.name, isHub: st.isHub };
       });
 
       lines.forEach(lineObj => {
@@ -1103,16 +1112,18 @@
         ctx.beginPath();
         sortedStations.forEach((st, idx) => {
           let pos = stationPos[st.id];
+          if (!pos) return;
           if (idx === 0) ctx.moveTo(pos.x, pos.y); else ctx.lineTo(pos.x, pos.y);
         });
         ctx.stroke();
       });
 
       Object.values(stationPos).forEach(pos => {
-        ctx.fillStyle = '#007acc'; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2.5;
-        ctx.beginPath(); ctx.arc(pos.x, pos.y, 6, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = pos.isHub ? '#20c997' : '#007acc'; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = pos.isHub ? 3 : 2.5;
+        let r = pos.isHub ? 8 : 6;
+        ctx.beginPath(); ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
         ctx.fillStyle = '#ffffff'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-        ctx.fillText(pos.name, pos.x, pos.y - 10);
+        ctx.fillText(pos.name, pos.x, pos.y - (r + 4));
       });
     }
 
@@ -1294,7 +1305,6 @@
       alert(`「${l.name}」の向きを反転しました。`);
     }
 
-    // --- 路線削除機能 ---
     function deleteLine(lineId) {
       const l = lines.find(item => item.id === lineId);
       if (!l) return;
@@ -1306,7 +1316,6 @@
       alert(`路線「${l.name}」を削除しました。`);
     }
 
-    // --- 区間修正（端点削り）機能 ---
     function openTrimModal(lineId) {
       const l = lines.find(item => item.id === lineId);
       if (!l) return;
@@ -1532,13 +1541,14 @@
       updateKeyGuide(mode);
     }
 
-    function createStationMarkerIcon(expressTypeName = '') {
+    function createStationMarkerIcon(expressTypeName = '', isHub = false) {
       let isSpecial = expressTypeName && expressTypeName !== '各駅停車';
-      let bgColor = isSpecial ? '#ff6600' : '#007acc';
+      let bgColor = isHub ? '#20c997' : (isSpecial ? '#ff6600' : '#007acc');
+      let size = isHub ? 18 : 14;
       return L.divIcon({
         className: 'custom-station-icon',
-        html: `<div class="station-marker ${isSpecial ? 'limited' : ''}" style="background:${bgColor};"></div>`,
-        iconSize: [14, 14], iconAnchor: [7, 7]
+        html: `<div class="station-marker ${isHub ? 'hub' : ''} ${isSpecial ? 'limited' : ''}" style="background:${bgColor};"></div>`,
+        iconSize: [size, size], iconAnchor: [size/2, size/2]
       });
     }
 
@@ -1546,22 +1556,20 @@
       if (currentMode === 'station') {
         const name = prompt('駅名を入力してください:', `あおぞら駅${stations.length + 1}`);
         if (!name) return;
-        const marker = L.marker(e.latlng, { icon: createStationMarkerIcon('各駅停車'), draggable: true }).addTo(map);
+        const marker = L.marker(e.latlng, { icon: createStationMarkerIcon('各駅停車', false), draggable: true }).addTo(map);
         marker.bindTooltip(name, { permanent: true, direction: 'top' });
-        const st = { id: Date.now() + Math.random(), name, marker, latlng: e.latlng };
+        const st = { id: Date.now() + Math.random(), name, marker, latlng: e.latlng, isHub: false, mergedStationIds: [] };
         stations.push(st);
         marker.on('click', (evt) => handleStationClick(evt, st));
       }
     });
 
-    // --- 駅削除（右クリックメニュー等またはポップアップからの削除など） ---
     function deleteStation(stId) {
       let st = stations.find(s => s.id === stId);
       if (!st) return;
       if (!confirm(`駅「${st.name}」を削除しますか？`)) return;
       map.removeLayer(st.marker);
       stations = stations.filter(s => s.id !== stId);
-      // 列車などの参照もクリア
       trainList.forEach(t => {
         if (t.startStation && t.startStation.id === stId) t.startStation = null;
         if (t.endStation && t.endStation.id === stId) t.endStation = null;
@@ -1573,6 +1581,7 @@
     function handleStationClick(evt, st) {
       if (evt) L.DomEvent.stopPropagation(evt);
       
+      // 1. 速達種別設定モードのとき：クリックで停車/通過を切り替えて色を変える
       if (currentMode === 'express-config') {
         if (!activeExpressConfigId) {
           alert('先にサイドバーから設定する速達種別を選択してください。');
@@ -1589,23 +1598,62 @@
         isStopped = !isStopped;
         expressStops[activeExpressConfigId][st.id] = isStopped;
 
-        st.marker.setIcon(L.divIcon({
-          className: 'custom-station-icon',
-          html: `<div class="station-marker" style="background:${isStopped ? exp.color : '#555'};"></div>`,
-          iconSize: [14, 14], iconAnchor: [7, 7]
-        }));
+        st.marker.setIcon(createStationMarkerIcon(isStopped ? exp.name : '各駅停車', st.isHub));
         st.marker.bindTooltip(`${st.name} (${exp.name}: ${isStopped ? '停車' : '通過'})`, { permanent: true, direction: 'top' });
         return;
       }
 
-      // 通常モード・設定モードでの駅クリック時、確認の上で削除できるようにポップアップまたは簡易案内を表示
-      if (currentMode === 'pan') {
-        if (confirm(`駅「${st.name}」を削除しますか？\n(キャンセルすると通常の選択・設定を行います)`)) {
-          deleteStation(st.id);
-          return;
+      // 2. 乗換統合（代表駅化）モードのとき
+      if (currentMode === 'transfer') {
+        if (!transferFirstStation) {
+          transferFirstStation = st;
+          alert(`1つ目の駅「${st.name}」を選択しました。次に統合（代表駅化）するもう1つの駅をクリックしてください。`);
+        } else {
+          let first = transferFirstStation;
+          transferFirstStation = null;
+          if (first.id === st.id) {
+            alert('同じ駅同士は統合できません。');
+            return;
+          }
+          let newName = prompt(`乗換統合（代表駅化）する駅名を入力してください:`, `${first.name}・${st.name}`);
+          if (!newName) return;
+
+          st.name = newName;
+          st.isHub = true;
+          st.mergedStationIds.push(first.id);
+          st.marker.setIcon(createStationMarkerIcon('各駅停車', true));
+          st.marker.bindTooltip(`${newName} (代表駅)`, { permanent: true, direction: 'top' });
+
+          map.removeLayer(first.marker);
+          stations = stations.filter(s => s.id !== first.id);
+
+          trainList.forEach(t => {
+            if (t.startStation && t.startStation.id === first.id) t.startStation = st;
+            if (t.endStation && t.endStation.id === first.id) t.endStation = st;
+            t.viaStations = t.viaStations.map(s => s.id === first.id ? st : s);
+          });
+
+          alert(`駅を統合し、代表駅「${newName}」を作成しました！`);
         }
+        return;
       }
 
+      // 3. 通常モード（地図移動）のとき：駅名変更 または 削除メニュー
+      if (currentMode === 'pan') {
+        let action = prompt(`駅「${st.name}」の操作:\n[1] 駅名を変更\n[2] 駅を削除\n[キャンセル] 何もしない`, "1");
+        if (action === "1") {
+          let newName = prompt("新しい駅名を入力してください:", st.name);
+          if (newName) {
+            st.name = newName;
+            st.marker.bindTooltip(newName, { permanent: true, direction: 'top' });
+          }
+        } else if (action === "2") {
+          deleteStation(st.id);
+        }
+        return;
+      }
+
+      // 4. 列車ルート設定モードのとき（始点・経由・終点）
       if (currentMode === 'start') { getActiveTrain().startStation = st; document.getElementById('start-name').innerText = st.name; }
       else if (currentMode === 'end') { getActiveTrain().endStation = st; document.getElementById('end-name').innerText = st.name; }
       else if (currentMode === 'via') { getActiveTrain().viaStations.push(st); updateViaDisplay(); }
