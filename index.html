@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>電車内表示器エディタ v4.32 (計画線Shiftロック修復版)</title>
+  <title>電車内表示器エディタ v4.33 (区間修正・駅削除・路線削除完全復活版)</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -43,7 +43,7 @@
     #main-container { flex: 1; display: flex; width: 100vw; height: calc(100vh - 50px); position: relative; overflow: hidden; }
     #map { flex: 1; height: 100%; background: #222; }
 
-    #sidebar { width: 430px; background: #222; border-left: 2px solid #444; display: flex; flex-direction: column; gap: 10px; padding: 10px; overflow-y: auto; z-index: 1000; flex-shrink: 0; height: 100%; }
+    #sidebar { width: 440px; background: #222; border-left: 2px solid #444; display: flex; flex-direction: column; gap: 10px; padding: 10px; overflow-y: auto; z-index: 1000; flex-shrink: 0; height: 100%; }
     .panel { background: #2a2a2a; border: 1px solid #444; border-radius: 6px; padding: 10px; }
     .panel h3 { font-size: 14px; margin-bottom: 8px; color: #00aaff; border-bottom: 1px solid #444; padding-bottom: 4px; display: flex; justify-content: space-between; align-items: center; }
 
@@ -74,7 +74,7 @@
     .folder-item { background: #333; border: 1px dashed #666; border-radius: 4px; padding: 6px; margin-bottom: 6px; }
     .folder-header { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
     .folder-color-input { width: 24px !important; height: 24px !important; padding: 0 !important; margin: 0 !important; cursor: pointer; border: none; }
-    .line-item, .plan-item, .express-item { display: flex; align-items: center; gap: 5px; margin-bottom: 4px; background: #1e1e1e; padding: 4px; border-radius: 4px; flex-wrap: wrap; }
+    .line-item, .plan-item, .express-item { display: flex; align-items: center; gap: 4px; margin-bottom: 4px; background: #1e1e1e; padding: 4px; border-radius: 4px; flex-wrap: wrap; }
     .line-item.in-folder { margin-left: 14px; border-left: 3px solid #555; }
     .line-color-badge { width: 12px; height: 12px; border-radius: 30%; display: inline-block; flex-shrink: 0; }
 
@@ -163,7 +163,7 @@
           ⚡ 速達種別管理 (各停は固定・削除不可)
           <button onclick="addNewExpressType()" style="width:auto; padding:2px 6px; font-size:11px;">➕ 種別追加</button>
         </h3>
-        <div id="express-list-container" style="max-height: 130px; overflow-y: auto;">
+        <div id="express-list-container" style="max-height: 120px; overflow-y: auto;">
           <p style="font-size: 11px; color:#888;">速達種別がありません</p>
         </div>
       </div>
@@ -173,7 +173,7 @@
           🛤 路線・支線・フォルダ管理
           <button onclick="addNewFolder()" style="width:auto; padding:2px 6px; font-size:11px;">➕ フォルダ追加</button>
         </h3>
-        <div id="line-list-container" style="max-height: 130px; overflow-y: auto;">
+        <div id="line-list-container" style="max-height: 140px; overflow-y: auto;">
           <p style="font-size: 11px; color:#888;">路線またはフォルダが存在しません</p>
         </div>
       </div>
@@ -183,7 +183,7 @@
           📐 計画線管理
           <button onclick="startPlanMode()" style="width:auto; padding:2px 6px; font-size:11px; background:#17a2b8;">➕ 計画線追加</button>
         </h3>
-        <div id="plan-list-container" style="max-height: 100px; overflow-y: auto;">
+        <div id="plan-list-container" style="max-height: 90px; overflow-y: auto;">
           <p style="font-size: 11px; color:#888;">固定された計画線はありません</p>
         </div>
       </div>
@@ -233,7 +233,7 @@
         </div>
         <button onclick="generateTimetableForActiveTrain()" style="background:#17a2b8;">🔄 この列車のダイヤ生成</button>
         
-        <div style="max-height: 100px; overflow-y: auto; margin-top: 5px;">
+        <div style="max-height: 90px; overflow-y: auto; margin-top: 5px;">
           <table class="timetable-table">
             <thead>
               <tr>
@@ -256,6 +256,29 @@
             <div id="display-text" class="led-grid"></div>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 区間修正用モーダル -->
+  <div id="trim-modal" class="modal-overlay">
+    <div class="modal-content-normal">
+      <h3 style="color: #ff9900;">✂️ 路線区間修正 (端点削除)</h3>
+      <p style="font-size: 12px; color: #ccc;">対象路線: <b id="trim-target-line-name" style="color:#00aaff;">-</b><br>削除するポイント数を指定して「削る」を押してください。</p>
+      <div>
+        <label style="font-size: 11px;">削除する端点の選択:</label>
+        <select id="trim-direction" style="margin-bottom:8px;">
+          <option value="end">終点側から削る</option>
+          <option value="start">始点側から削る</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size: 11px;">削るポイント数 (現在全 <span id="trim-total-pts">0</span> 点):</label>
+        <input type="number" id="trim-count-input" value="5" min="1" max="500">
+      </div>
+      <div style="display: flex; gap: 10px; margin-top: 10px;">
+        <button onclick="executeTrimLine()" style="flex:1; background:#d9534f;">✂️ 指定点数を削る</button>
+        <button onclick="closeTrimModal()" style="flex:1; background:#6c757d;">キャンセル</button>
       </div>
     </div>
   </div>
@@ -345,11 +368,11 @@
   </div>
 
   <script>
-    // --- 計画線Shiftロック修復版エディタ (v4.32) ---
+    // --- 区間修正・駅削除・路線削除完全復活版エディタ (v4.33) ---
 
     localforage.config({
-      name: 'TrainEditorApp_RiasCoast_v18',
-      storeName: 'works_rias_coast_v18',
+      name: 'TrainEditorApp_RiasCoast_v19',
+      storeName: 'works_rias_coast_v19',
       size: 50 * 1024 * 1024
     });
 
@@ -464,6 +487,7 @@
     let currentZoomScale = 1.0, panX = 0, panY = 0, isPanning = false, startPanX = 0, startPanY = 0;
 
     let testRunState = { isRunning: false, timer: null, fullRoutePath: [], currentIndex: 0 };
+    let trimTargetLineId = null;
 
     const lineColors = ['#007acc', '#e6194B', '#3cb44b', '#ffe119', '#911eb4', '#f58231'];
 
@@ -1174,9 +1198,9 @@
         item.style.border = isSelected ? '1px solid #00ffcc' : '1px solid transparent';
         item.innerHTML = `
           <input type="color" class="folder-color-input" value="${e.color}" onchange="updateExpressConfig('${e.id}', undefined, this.value)">
-          <input type="text" value="${e.name}" ${e.isFixed ? 'disabled style="background:#222; color:#aaa; margin:0; padding:2px 4px; font-size:11px; width:90px;"' : 'style="margin:0; padding:2px 4px; font-size:11px; width:90px;"'} onchange="updateExpressConfig('${e.id}', this.value, undefined)">
-          <button onclick="selectExpressForConfig('${e.id}')" style="font-size:10px; padding:2px 5px; background:${isSelected ? '#20c997' : '#007acc'};">🎯 停車駅設定</button>
-          ${e.isFixed ? '<span style="font-size:10px; color:#888; padding:2px 4px;">[固定]</span>' : `<button onclick="deleteExpressType('${e.id}')" style="font-size:10px; padding:2px 4px; background:#dc3545;">🗑️</button>`}
+          <input type="text" value="${e.name}" ${e.isFixed ? 'disabled style="background:#222; color:#aaa; margin:0; padding:2px 4px; font-size:11px; width:80px;"' : 'style="margin:0; padding:2px 4px; font-size:11px; width:80px;"'} onchange="updateExpressConfig('${e.id}', this.value, undefined)">
+          <button onclick="selectExpressForConfig('${e.id}')" style="font-size:10px; padding:2px 4px; background:${isSelected ? '#20c997' : '#007acc'};">🎯 停車駅</button>
+          ${e.isFixed ? '<span style="font-size:9px; color:#888; padding:2px 2px;">[固定]</span>' : `<button onclick="deleteExpressType('${e.id}')" style="font-size:10px; padding:2px 4px; background:#dc3545;">🗑️</button>`}
         `;
         container.appendChild(item);
       });
@@ -1268,6 +1292,52 @@
       l.points.reverse();
       updateLinePolylines(l);
       alert(`「${l.name}」の向きを反転しました。`);
+    }
+
+    // --- 路線削除機能 ---
+    function deleteLine(lineId) {
+      const l = lines.find(item => item.id === lineId);
+      if (!l) return;
+      if (!confirm(`路線「${l.name}」を削除しますか？`)) return;
+      if (l.polyline) map.removeLayer(l.polyline);
+      if (l.borderPolyline) map.removeLayer(l.borderPolyline);
+      lines = lines.filter(item => item.id !== lineId);
+      renderLineList();
+      alert(`路線「${l.name}」を削除しました。`);
+    }
+
+    // --- 区間修正（端点削り）機能 ---
+    function openTrimModal(lineId) {
+      const l = lines.find(item => item.id === lineId);
+      if (!l) return;
+      if (l.points.length <= 2) return alert('ポイント数が少なすぎるため削れません。');
+      trimTargetLineId = lineId;
+      document.getElementById('trim-target-line-name').innerText = l.name;
+      document.getElementById('trim-total-pts').innerText = l.points.length;
+      document.getElementById('trim-count-input').value = Math.min(5, l.points.length - 2);
+      document.getElementById('trim-modal').style.display = 'flex';
+    }
+    function closeTrimModal() { document.getElementById('trim-modal').style.display = 'none'; }
+
+    function executeTrimLine() {
+      const l = lines.find(item => item.id === trimTargetLineId);
+      if (!l) return closeTrimModal();
+      let count = parseInt(document.getElementById('trim-count-input').value, 10) || 1;
+      let dir = document.getElementById('trim-direction').value;
+
+      if (count >= l.points.length - 1) {
+        return alert('すべてのポイントを削ることはできません。');
+      }
+
+      if (dir === 'end') {
+        l.points.splice(l.points.length - count, count);
+      } else {
+        l.points.splice(0, count);
+      }
+      updateLinePolylines(l);
+      closeTrimModal();
+      renderLineList();
+      alert(`路線「${l.name}」の区間を修正しました（残りポイント数: ${l.points.length}点）`);
     }
 
     function startPlanMode(targetLineId = null) {
@@ -1394,12 +1464,14 @@
 
       item.innerHTML = `
         <span class="line-color-badge" style="background:${lineObj.color}"></span>
-        <input type="text" value="${lineObj.name}" style="margin:0; padding:2px 4px; font-size:11px; width:70px;" onchange="updateLineName(${lineObj.id}, this.value)">
-        <select style="margin:0; padding:2px; font-size:10px; width:auto; max-width:70px;" onchange="assignLineToFolder(${lineObj.id}, this.value)">${folderOptions}</select>
+        <input type="text" value="${lineObj.name}" style="margin:0; padding:2px 4px; font-size:11px; width:65px;" onchange="updateLineName(${lineObj.id}, this.value)">
+        <select style="margin:0; padding:2px; font-size:10px; width:auto; max-width:65px;" onchange="assignLineToFolder(${lineObj.id}, this.value)">${folderOptions}</select>
         <div style="display:flex; gap:2px; width:100%; margin-top:2px;">
           <button onclick="toggleLineBranch(${lineObj.id})" style="font-size:10px; padding:2px; background:${lineObj.isBranch ? '#28a745' : '#444'};" title="個別支線切替">🌿</button>
           <button onclick="reverseLineDirection(${lineObj.id})" style="font-size:10px; padding:2px; background:#444;" title="反転">🔄</button>
           <button onclick="startPlanMode(${lineObj.id})" style="font-size:10px; padding:2px; background:#17a2b8;" title="終点から延長">📐</button>
+          <button onclick="openTrimModal(${lineObj.id})" style="font-size:10px; padding:2px; background:#e67e22;" title="区間修正(端点削り)">✂️</button>
+          <button onclick="deleteLine(${lineObj.id})" style="font-size:10px; padding:2px; background:#dc3545;" title="路線削除">🗑️</button>
         </div>
       `;
       return item;
@@ -1410,7 +1482,7 @@
       if (l) l.name = newName;
     }
 
-    // --- 計画線モードのShiftキーロック制御を完全復活 ---
+    // --- 計画線モードのShiftキーロック制御 ---
     const mapContainer = document.getElementById('map');
 
     window.addEventListener('keydown', (e) => {
@@ -1435,7 +1507,6 @@
 
     mapContainer.addEventListener('mousemove', (e) => {
       if (currentMode === 'plan' && activePlanState.active) {
-        // ロック中のときはマウス移動による追従を完全に停止する
         if (activePlanState.isLocked) return;
 
         let pt = map.mouseEventToLatLng(e);
@@ -1483,6 +1554,22 @@
       }
     });
 
+    // --- 駅削除（右クリックメニュー等またはポップアップからの削除など） ---
+    function deleteStation(stId) {
+      let st = stations.find(s => s.id === stId);
+      if (!st) return;
+      if (!confirm(`駅「${st.name}」を削除しますか？`)) return;
+      map.removeLayer(st.marker);
+      stations = stations.filter(s => s.id !== stId);
+      // 列車などの参照もクリア
+      trainList.forEach(t => {
+        if (t.startStation && t.startStation.id === stId) t.startStation = null;
+        if (t.endStation && t.endStation.id === stId) t.endStation = null;
+        t.viaStations = t.viaStations.filter(s => s.id !== stId);
+      });
+      alert(`駅「${st.name}」を削除しました。`);
+    }
+
     function handleStationClick(evt, st) {
       if (evt) L.DomEvent.stopPropagation(evt);
       
@@ -1509,6 +1596,14 @@
         }));
         st.marker.bindTooltip(`${st.name} (${exp.name}: ${isStopped ? '停車' : '通過'})`, { permanent: true, direction: 'top' });
         return;
+      }
+
+      // 通常モード・設定モードでの駅クリック時、確認の上で削除できるようにポップアップまたは簡易案内を表示
+      if (currentMode === 'pan') {
+        if (confirm(`駅「${st.name}」を削除しますか？\n(キャンセルすると通常の選択・設定を行います)`)) {
+          deleteStation(st.id);
+          return;
+        }
       }
 
       if (currentMode === 'start') { getActiveTrain().startStation = st; document.getElementById('start-name').innerText = st.name; }
