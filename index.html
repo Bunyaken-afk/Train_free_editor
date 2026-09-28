@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>電車内表示器エディタ v4.49 (サーバー共通DB・高度フィルタ＆ソート版)</title>
+  <title>電車内表示器エディタ v4.50 (モバイルコンパクト対応版)</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -12,17 +12,18 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { width: 100vw; height: 100vh; overflow: hidden; background: #1a1a1a; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; }
     
-    header { background: #2a2a2a; padding: 6px 12px; display: flex; gap: 8px; align-items: center; border-bottom: 2px solid #444; z-index: 1000; flex-wrap: nowrap; height: 50px; flex-shrink: 0; width: 100vw; }
+    /* モバイル・コンパクト対応ヘッダー */
+    header { background: #2a2a2a; padding: 4px 8px; display: flex; gap: 4px; align-items: center; border-bottom: 2px solid #444; z-index: 1000; flex-wrap: wrap; height: auto; min-height: 42px; flex-shrink: 0; width: 100vw; }
     
-    .header-group { display: flex; align-items: center; gap: 6px; }
+    .header-group { display: flex; align-items: center; gap: 4px; }
     
     .mode-select {
-      background: #333; color: #fff; border: 1px solid #007acc; padding: 5px 8px; border-radius: 4px; font-size: 13px; font-weight: bold; cursor: pointer; outline: none; min-width: 150px;
+      background: #333; color: #fff; border: 1px solid #007acc; padding: 3px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; cursor: pointer; outline: none; min-width: 120px;
     }
     .mode-select:focus { border-color: #0098ff; }
 
     .header-btn {
-      background: #333; color: #fff; border: 1px solid #555; padding: 5px 10px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 4px; font-size: 12px; white-space: nowrap; margin: 0; width: auto;
+      background: #333; color: #fff; border: 1px solid #555; padding: 3px 6px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 2px; font-size: 10px; white-space: nowrap; margin: 0; width: auto;
     }
     .header-btn:hover { background: #444; }
     .header-btn.success { background: #28a745; border-color: #34ce57; font-weight: bold; }
@@ -36,125 +37,122 @@
     .header-btn.test-run { background: #00ffcc; color: #000; font-weight: bold; }
 
     .key-guide-box {
-      background: #1e1e1e; border: 1px solid #00aaff; border-radius: 4px; padding: 4px 10px; font-size: 11px; color: #00ffcc; display: flex; align-items: center; gap: 6px; white-space: nowrap;
+      background: #1e1e1e; border: 1px solid #00aaff; border-radius: 4px; padding: 2px 6px; font-size: 10px; color: #00ffcc; display: flex; align-items: center; gap: 4px; white-space: nowrap; max-width: 300px; overflow: hidden; text-overflow: ellipsis;
     }
 
-    #main-container { flex: 1; display: flex; width: 100vw; height: calc(100vh - 50px); position: relative; overflow: hidden; }
+    #main-container { flex: 1; display: flex; width: 100vw; height: calc(100vh - 42px); position: relative; overflow: hidden; }
     #map { flex: 1; height: 100%; background: #222; }
 
-    #sidebar { width: 440px; background: #222; border-left: 2px solid #444; display: flex; flex-direction: column; gap: 10px; padding: 10px; overflow-y: auto; z-index: 1000; flex-shrink: 0; height: 100%; }
-    .panel { background: #2a2a2a; border: 1px solid #444; border-radius: 6px; padding: 10px; }
-    .panel h3 { font-size: 14px; margin-bottom: 8px; color: #00aaff; border-bottom: 1px solid #444; padding-bottom: 4px; display: flex; justify-content: space-between; align-items: center; }
+    /* モバイル・コンパクト対応サイドバー (幅をスリム化) */
+    #sidebar { width: 320px; background: #222; border-left: 2px solid #444; display: flex; flex-direction: column; gap: 6px; padding: 6px; overflow-y: auto; z-index: 1000; flex-shrink: 0; height: 100%; }
+    .panel { background: #2a2a2a; border: 1px solid #444; border-radius: 4px; padding: 6px; }
+    .panel h3 { font-size: 12px; margin-bottom: 6px; color: #00aaff; border-bottom: 1px solid #444; padding-bottom: 3px; display: flex; justify-content: space-between; align-items: center; }
 
-    #display-preview { background: #000; border: 4px solid #333; border-radius: 8px; padding: 10px; text-align: center; }
-    .led-board { background: #111; border: 1px solid #222; padding: 10px; display: flex; justify-content: flex-start; align-items: center; min-height: 80px; overflow-x: auto; }
-    .led-grid { display: flex; gap: 2px; justify-content: flex-start; background: #050505; padding: 6px; border-radius: 4px; }
-    .char-matrix { display: grid; grid-template-columns: repeat(16, 3px); grid-template-rows: repeat(16, 3px); gap: 1px; flex-shrink: 0; }
-    .pixel { width: 3px; height: 3px; background: #222; border-radius: 50%; }
-    .pixel.on { background: #00ff66; box-shadow: 0 0 2px #00ff66; }
+    #display-preview { background: #000; border: 2px solid #333; border-radius: 4px; padding: 6px; text-align: center; }
+    .led-board { background: #111; border: 1px solid #222; padding: 6px; display: flex; justify-content: flex-start; align-items: center; min-height: 50px; overflow-x: auto; }
+    .led-grid { display: flex; gap: 1px; justify-content: flex-start; background: #050505; padding: 4px; border-radius: 3px; }
+    .char-matrix { display: grid; grid-template-columns: repeat(16, 2px); grid-template-rows: repeat(16, 2px); gap: 1px; flex-shrink: 0; }
+    .pixel { width: 2px; height: 2px; background: #222; border-radius: 50%; }
+    .pixel.on { background: #00ff66; box-shadow: 0 0 1px #00ff66; }
 
-    select, input, button { background: #333; color: #fff; border: 1px solid #555; padding: 6px; border-radius: 4px; width: 100%; margin-bottom: 5px; }
+    select, input, button { background: #333; color: #fff; border: 1px solid #555; padding: 4px; border-radius: 3px; width: 100%; margin-bottom: 4px; font-size: 11px; }
     button { cursor: pointer; background: #007acc; border: none; font-weight: bold; }
     button:hover { background: #0098ff; }
     
     .station-marker {
-      width: 14px; height: 14px; border-radius: 50%; background: #007acc; border: 2px solid #fff; box-shadow: 0 0 4px rgba(0,0,0,0.5); cursor: pointer;
+      width: 12px; height: 12px; border-radius: 50%; background: #007acc; border: 2px solid #fff; box-shadow: 0 0 3px rgba(0,0,0,0.5); cursor: pointer;
     }
     .station-marker.stop { background: #ff6600; border-color: #ffff00; }
     .station-marker.pass { background: #555555; border-color: #888; }
-    .station-marker.no-entry { background: #d9534f; border-color: #fff; box-shadow: 0 0 6px #d9534f; }
+    .station-marker.no-entry { background: #d9534f; border-color: #fff; box-shadow: 0 0 4px #d9534f; }
     .station-marker.other-no-stop { background: #6f42c1; border-color: #fff; }
     .station-marker.other-stop { background: #007bff; border-color: #fff; }
-    .station-marker.hub { background: #20c997; border-color: #fff; box-shadow: 0 0 8px #20c997; width: 18px; height: 18px; margin-left: -2px; margin-top: -2px; }
+    .station-marker.hub { background: #20c997; border-color: #fff; box-shadow: 0 0 6px #20c997; width: 15px; height: 15px; margin-left: -1.5px; margin-top: -1.5px; }
 
     .train-marker {
-      width: 18px; height: 18px; border-radius: 50%; background: #ffcc00; border: 2px solid #fff; box-shadow: 0 0 10px #ffcc00; z-index: 1500;
+      width: 14px; height: 14px; border-radius: 50%; background: #ffcc00; border: 2px solid #fff; box-shadow: 0 0 6px #ffcc00; z-index: 1500;
     }
 
-    .timetable-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 5px; }
-    .timetable-table th, .timetable-table td { border: 1px solid #444; padding: 4px; text-align: center; }
+    .timetable-table { width: 100%; border-collapse: collapse; font-size: 10px; margin-top: 4px; }
+    .timetable-table th, .timetable-table td { border: 1px solid #444; padding: 2px; text-align: center; }
     .timetable-table th { background: #333; color: #00aaff; }
 
-    .folder-item { background: #333; border: 1px dashed #666; border-radius: 4px; padding: 6px; margin-bottom: 6px; }
-    .folder-header { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
-    .folder-color-input { width: 24px !important; height: 24px !important; padding: 0 !important; margin: 0 !important; cursor: pointer; border: none; }
-    .line-item, .plan-item, .express-item { display: flex; align-items: center; gap: 4px; margin-bottom: 4px; background: #1e1e1e; padding: 4px; border-radius: 4px; flex-wrap: wrap; }
-    .line-item.in-folder { margin-left: 14px; border-left: 3px solid #555; }
-    .line-color-badge { width: 12px; height: 12px; border-radius: 30%; display: inline-block; flex-shrink: 0; }
+    .folder-item { background: #333; border: 1px dashed #666; border-radius: 3px; padding: 4px; margin-bottom: 4px; }
+    .folder-header { display: flex; align-items: center; gap: 4px; margin-bottom: 2px; }
+    .folder-color-input { width: 20px !important; height: 20px !important; padding: 0 !important; margin: 0 !important; cursor: pointer; border: none; }
+    .line-item, .plan-item, .express-item { display: flex; align-items: center; gap: 3px; margin-bottom: 3px; background: #1e1e1e; padding: 3px; border-radius: 3px; flex-wrap: wrap; }
+    .line-item.in-folder { margin-left: 10px; border-left: 2px solid #555; }
+    .line-color-badge { width: 10px; height: 10px; border-radius: 30%; display: inline-block; flex-shrink: 0; }
 
-    .train-tab { background: #333; border: 1px solid #555; padding: 4px 8px; font-size: 11px; cursor: pointer; border-radius: 4px 4px 0 0; }
+    .train-tab { background: #333; border: 1px solid #555; padding: 3px 6px; font-size: 10px; cursor: pointer; border-radius: 3px 3px 0 0; }
     .train-tab.active { background: #007acc; font-weight: bold; }
 
     .modal-overlay {
-      display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.9); z-index: 3000; justify-content: center; align-items: center; padding: 30px;
+      display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.9); z-index: 3000; justify-content: center; align-items: center; padding: 15px;
     }
     .modal-content-fullscreen {
-      background: #222; border: 2px solid #555; border-radius: 8px; padding: 20px; width: 95vw; height: 92vh; display: flex; flex-direction: column; gap: 12px; overflow: hidden;
+      background: #222; border: 2px solid #555; border-radius: 6px; padding: 12px; width: 98vw; height: 95vh; display: flex; flex-direction: column; gap: 8px; overflow: hidden;
     }
     .modal-content-normal {
-      background: #222; border: 2px solid #555; border-radius: 8px; padding: 20px; width: 90vw; max-width: 600px; display: flex; flex-direction: column; gap: 12px;
+      background: #222; border: 2px solid #555; border-radius: 6px; padding: 12px; width: 95vw; max-width: 500px; display: flex; flex-direction: column; gap: 8px;
     }
 
     .works-grid-container {
       display: grid;
-      grid-template-columns: repeat(5, 1fr);
-      grid-template-rows: repeat(3, 1fr);
-      gap: 12px;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 8px;
       flex: 1;
       overflow-y: auto;
-      padding: 4px;
+      padding: 2px;
     }
     .work-card {
-      background: #2a2a2a; border: 1px solid #444; border-radius: 6px; padding: 10px; display: flex; flex-direction: column; justify-content: space-between; gap: 6px; font-size: 11px;
+      background: #2a2a2a; border: 1px solid #444; border-radius: 4px; padding: 8px; display: flex; flex-direction: column; justify-content: space-between; gap: 4px; font-size: 10px;
     }
     .work-card-header { display: flex; justify-content: space-between; align-items: center; }
-    .tag-badge { background: #17a2b8; color: #fff; padding: 2px 4px; border-radius: 3px; font-size: 9px; display: inline-block; margin-right: 2px; }
+    .tag-badge { background: #17a2b8; color: #fff; padding: 1px 3px; border-radius: 2px; font-size: 8px; display: inline-block; margin-right: 2px; }
   </style>
 </head>
 <body>
 
   <header>
     <div class="header-group">
-      <span style="font-size: 12px; color: #aaa;">モード:</span>
       <select id="mode-select" class="mode-select" onchange="setMode(this.value)">
         <option value="pan">✋ 地図移動</option>
-        <option value="plan">📐 計画線・延長モード</option>
+        <option value="plan">📐 計画線・延長</option>
         <option value="station">🚉 駅配置</option>
-        <option value="transfer">🔄 乗換統合 (代表駅化)</option>
+        <option value="transfer">🔄 乗換統合</option>
         <option value="start">🟢 始点設定</option>
-        <option value="via">🟨 経由地設定 (任意)</option>
+        <option value="via">🟨 経由地設定</option>
         <option value="end">🔴 終点設定</option>
-        <option value="express-config">⚡ 種別ごとの停車・通過設定 (クリック切替)</option>
+        <option value="express-config">⚡ 種別停車設定</option>
       </select>
     </div>
 
-    <div id="key-guide-box" class="key-guide-box"><span>💡 【地図移動】マウスドラッグで地図を自由に移動できます。（駅クリックで駅名変更）</span></div>
+    <div id="key-guide-box" class="key-guide-box"><span>✋ 地図移動モード</span></div>
 
-    <button class="header-btn plan" onclick="startPlanMode()">📐 新規計画線</button>
-    <button class="header-btn success" id="finish-plan-btn" style="display:none; background:#20c997;" onclick="finishPlanLine()">📌 計画線・延長確定</button>
+    <button class="header-btn plan" onclick="startPlanMode()">📐 計画線</button>
+    <button class="header-btn success" id="finish-plan-btn" style="display:none; background:#20c997;" onclick="finishPlanLine()">📌 確定</button>
     <button class="header-btn success" id="finish-line-btn" style="display:none; background:#28a745;" onclick="finishCurrentLine()">✅ 路線確定</button>
-    <button class="header-btn danger" onclick="discardCurrentDrawing()" title="破棄">🗑️ 破棄</button>
+    <button class="header-btn danger" onclick="discardCurrentDrawing()" title="破棄">🗑️</button>
 
-    <div style="height: 16px; border-left: 1px solid #555; margin: 0 4px;"></div>
-
-    <div style="display:flex; align-items:center; gap:4px; background:#222; padding:2px 6px; border-radius:4px; border:1px solid #555;">
-      <span style="font-size:11px; color:#aaa;">間引き間隔:</span>
-      <input type="number" id="simplify-distance-input" value="50" min="5" max="500" step="5" style="width:50px; margin:0; padding:2px; font-size:11px; text-align:center; background:#111; color:#fff; border:1px solid #444;">
-      <span style="font-size:11px; color:#aaa;">m</span>
+    <div style="display:flex; align-items:center; gap:2px; background:#222; padding:1px 4px; border-radius:3px; border:1px solid #555;">
+      <span style="font-size:9px; color:#aaa;">間引:</span>
+      <input type="number" id="simplify-distance-input" value="50" min="5" max="500" step="5" style="width:38px; margin:0; padding:1px; font-size:10px; text-align:center; background:#111; color:#fff; border:1px solid #444;">
+      <span style="font-size:9px; color:#aaa;">m</span>
     </div>
-    <button class="header-btn optimize" onclick="optimizeAllLinesPoints()" title="指定した間隔で厳格に間引きし、メモリを節約">🧹 間引き実行</button>
+    <button class="header-btn optimize" onclick="optimizeAllLinesPoints()" title="間引き実行">🧹</button>
 
-    <button id="track-btn" class="header-btn" onclick="toggleTracking()">🎥 追尾 OFF</button>
-    <button id="audio-btn" class="header-btn" onclick="toggleAudio()">🔊 アナウンス OFF</button>
-    <button id="test-run-btn" class="header-btn test-run" onclick="toggleTestRun()">▶ 試運転開始</button>
-    <button class="header-btn capture" onclick="openCaptureModal()">📸 路線図出力</button>
+    <button id="track-btn" class="header-btn" onclick="toggleTracking()">🎥 追尾</button>
+    <button id="audio-btn" class="header-btn" onclick="toggleAudio()">🔊 音声</button>
+    <button id="test-run-btn" class="header-btn test-run" onclick="toggleTestRun()">▶ 試運転</button>
+    <button class="header-btn capture" onclick="openCaptureModal()">📸 出力</button>
 
-    <div style="margin-left: auto; display: flex; gap: 6px;">
-      <button class="header-btn online-share" onclick="openShareModal()">🌐 サーバー共有</button>
-      <button class="header-btn online-browse" onclick="openBrowseModal()">📖 サーバー閲覧</button>
-      <button class="header-btn" onclick="exportJSON()" style="background:#28a745; font-weight:bold;">💾 JSON保存</button>
-      <button class="header-btn" onclick="importJSON('overwrite')" style="background:#d9534f;" title="上書き読込">📂 上書き読込</button>
-      <button class="header-btn" onclick="importJSON('append')" style="background:#f0ad4e;" title="追加読込">📂 追加読込</button>
+    <div style="margin-left: auto; display: flex; gap: 4px;">
+      <button class="header-btn online-share" onclick="openShareModal()">🌐 共有</button>
+      <button class="header-btn online-browse" onclick="openBrowseModal()">📖 一覧</button>
+      <button class="header-btn" onclick="exportJSON()" style="background:#28a745;">💾 JSON</button>
+      <button class="header-btn" onclick="importJSON('overwrite')" style="background:#d9534f;" title="上書き">📂 上書</button>
+      <button class="header-btn" onclick="importJSON('append')" style="background:#f0ad4e;" title="追加">📂 追加</button>
     </div>
   </header>
 
@@ -164,90 +162,83 @@
     <div id="sidebar">
       <div class="panel">
         <h3>
-          ⚡ 種別ごとの停車設定 (個別フォーカス)
-          <button onclick="addNewExpressType()" style="width:auto; padding:2px 6px; font-size:11px;">➕ 種別追加</button>
+          ⚡ 種別設定
+          <button onclick="addNewExpressType()" style="width:auto; padding:1px 4px; font-size:10px;">➕ 追加</button>
         </h3>
-        <div style="font-size: 10px; color: #aaa; margin-bottom: 6px; line-height: 1.3;">
-          選択中の種別の停車・通過設定のみがマップ上に反映されます。他の種別は折りたたまれます。
-        </div>
-        <div id="express-list-container" style="max-height: 200px; overflow-y: auto;">
-          <p style="font-size: 11px; color:#888;">速達種別がありません</p>
+        <div id="express-list-container" style="max-height: 140px; overflow-y: auto;">
+          <p style="font-size: 10px; color:#888;">速達種別なし</p>
         </div>
       </div>
 
       <div class="panel">
         <h3>
-          🛤 路線・支線・フォルダ管理
-          <button onclick="addNewFolder()" style="width:auto; padding:2px 6px; font-size:11px;">➕ フォルダ追加</button>
+          🛤 路線・フォルダ
+          <button onclick="addNewFolder()" style="width:auto; padding:1px 4px; font-size:10px;">➕ フォルダ</button>
         </h3>
-        <div id="line-list-container" style="max-height: 140px; overflow-y: auto;">
-          <p style="font-size: 11px; color:#888;">路線またはフォルダが存在しません</p>
+        <div id="line-list-container" style="max-height: 110px; overflow-y: auto;">
+          <p style="font-size: 10px; color:#888;">路線なし</p>
         </div>
       </div>
 
       <div class="panel">
         <h3>
-          📐 計画線管理
-          <button onclick="startPlanMode()" style="width:auto; padding:2px 6px; font-size:11px; background:#17a2b8;">➕ 計画線追加</button>
+          📐 計画線
+          <button onclick="startPlanMode()" style="width:auto; padding:1px 4px; font-size:10px; background:#17a2b8;">➕ 追加</button>
         </h3>
-        <div id="plan-list-container" style="max-height: 90px; overflow-y: auto;">
-          <p style="font-size: 11px; color:#888;">固定された計画線はありません</p>
+        <div id="plan-list-container" style="max-height: 70px; overflow-y: auto;">
+          <p style="font-size: 10px; color:#888;">計画線なし</p>
         </div>
       </div>
 
       <div class="panel">
         <h3>
-          🚃 列車・運行管理 
-          <button onclick="addNewTrain()" style="width:auto; padding:2px 6px; font-size:11px;">➕ 列車追加</button>
+          🚃 列車運行
+          <button onclick="addNewTrain()" style="width:auto; padding:1px 4px; font-size:10px;">➕ 列車</button>
         </h3>
-        <div id="train-tabs-container" style="display:flex; gap:2px; margin-bottom:8px; overflow-x:auto;"></div>
+        <div id="train-tabs-container" style="display:flex; gap:2px; margin-bottom:4px; overflow-x:auto;"></div>
 
         <div id="train-editor-content">
-          <p>選択中列車: <b id="active-train-title" style="color:#00aaff">列車 1</b></p>
-          <p>始点: <span id="start-name" style="color:#00ff66">未設定</span></p>
-          <p>経由 (任意): <span id="via-names" style="color:#ffcc00">なし</span> <button onclick="clearViaStations()" style="width:auto; padding:2px 5px; font-size:10px;">クリア</button></p>
-          <p>終点: <span id="end-name" style="color:#ff4444">未設定</span></p>
+          <p style="font-size:10px;">選択: <b id="active-train-title" style="color:#00aaff">列車 1</b></p>
+          <p style="font-size:10px;">始点: <span id="start-name" style="color:#00ff66">未設定</span></p>
+          <p style="font-size:10px;">経由: <span id="via-names" style="color:#ffcc00">なし</span> <button onclick="clearViaStations()" style="width:auto; padding:1px 3px; font-size:9px;">クリア</button></p>
+          <p style="font-size:10px;">終点: <span id="end-name" style="color:#ff4444">未設定</span></p>
           
-          <div style="margin-top: 5px;">
-            <label style="font-size: 11px;">速達種別名 (完全一致):</label>
-            <input type="text" id="train-express-name" value="各駅停車" placeholder="例: 特急、各駅停車" onchange="updateActiveTrainConfig()">
+          <div style="margin-top: 3px;">
+            <label style="font-size: 10px;">速達種別名:</label>
+            <input type="text" id="train-express-name" value="各駅停車" onchange="updateActiveTrainConfig()" style="padding:2px; font-size:10px;">
           </div>
 
-          <div style="display:flex; gap:5px; margin-top:5px;">
+          <div style="display:flex; gap:4px; margin-top:3px;">
             <div style="flex:1;">
-              <label style="font-size: 11px;">最高速度 (km/h):</label>
-              <input type="number" id="train-speed" value="60" min="10" max="300" onchange="updateActiveTrainConfig()">
+              <label style="font-size: 9px;">最高速度(km/h):</label>
+              <input type="number" id="train-speed" value="60" min="10" max="300" onchange="updateActiveTrainConfig()" style="padding:2px; font-size:10px;">
             </div>
             <div style="flex:1;">
-              <label style="font-size: 11px;">標準停車時間 (秒):</label>
-              <input type="number" id="stop-time" value="3" min="0" max="60" onchange="updateActiveTrainConfig()">
+              <label style="font-size: 9px;">停車時間(秒):</label>
+              <input type="number" id="stop-time" value="3" min="0" max="60" onchange="updateActiveTrainConfig()" style="padding:2px; font-size:10px;">
             </div>
           </div>
         </div>
       </div>
 
       <div class="panel">
-        <h3>📅 ダイヤ（時刻表・探索制御）</h3>
-        <div style="display:flex; gap:5px;">
+        <h3>📅 ダイヤ制御</h3>
+        <div style="display:flex; gap:4px;">
           <div style="flex:1;">
-            <label style="font-size:11px;">始点発車時刻:</label>
-            <input type="time" id="timetable-start-time" value="08:00">
+            <label style="font-size:9px;">始発発車:</label>
+            <input type="time" id="timetable-start-time" value="08:00" style="padding:2px; font-size:10px;">
           </div>
           <div style="flex:1;">
-            <label style="font-size:11px;">基準駅間走行 (秒):</label>
-            <input type="number" id="default-travel-sec" value="60" min="10">
+            <label style="font-size:9px;">基準走行(秒):</label>
+            <input type="number" id="default-travel-sec" value="60" min="10" style="padding:2px; font-size:10px;">
           </div>
         </div>
-        <button onclick="generateTimetableForActiveTrain()" style="background:#17a2b8;">🔄 ダイヤ生成 (迂回・通過判定付)</button>
+        <button onclick="generateTimetableForActiveTrain()" style="background:#17a2b8; padding:4px; font-size:10px;">🔄 ダイヤ生成</button>
         
-        <div style="max-height: 90px; overflow-y: auto; margin-top: 5px;">
+        <div style="max-height: 70px; overflow-y: auto; margin-top: 3px;">
           <table class="timetable-table">
             <thead>
-              <tr>
-                <th>駅名</th>
-                <th>着時刻</th>
-                <th>発時刻</th>
-              </tr>
+              <tr><th>駅名</th><th>着</th><th>発</th></tr>
             </thead>
             <tbody id="timetable-body">
               <tr><td colspan="3" style="color:#888;">ダイヤ未作成</td></tr>
@@ -257,7 +248,7 @@
       </div>
 
       <div class="panel">
-        <h3>📺 車内表示器 (選択列車の案内)</h3>
+        <h3>📺 表示器</h3>
         <div id="display-preview">
           <div class="led-board">
             <div id="display-text" class="led-grid"></div>
@@ -270,22 +261,22 @@
   <!-- 区間修正用モーダル -->
   <div id="trim-modal" class="modal-overlay">
     <div class="modal-content-normal">
-      <h3 style="color: #ff9900;">✂️ 路線区間修正 (端点削除)</h3>
-      <p style="font-size: 12px; color: #ccc;">対象路線: <b id="trim-target-line-name" style="color:#00aaff;">-</b><br>削除するポイント数を指定して「削る」を押してください。</p>
+      <h3 style="color: #ff9900; font-size:13px;">✂️ 区間修正</h3>
+      <p style="font-size: 11px; color: #ccc;">対象: <b id="trim-target-line-name" style="color:#00aaff;">-</b></p>
       <div>
-        <label style="font-size: 11px;">削除する端点の選択:</label>
-        <select id="trim-direction" style="margin-bottom:8px;">
+        <label style="font-size: 10px;">削除方向:</label>
+        <select id="trim-direction" style="font-size:10px; padding:2px;">
           <option value="end">終点側から削る</option>
           <option value="start">始点側から削る</option>
         </select>
       </div>
       <div>
-        <label style="font-size: 11px;">削るポイント数 (現在全 <span id="trim-total-pts">0</span> 点):</label>
-        <input type="number" id="trim-count-input" value="5" min="1" max="500">
+        <label style="font-size: 10px;">削るポイント数 (全 <span id="trim-total-pts">0</span> 点):</label>
+        <input type="number" id="trim-count-input" value="5" min="1" max="500" style="font-size:10px; padding:2px;">
       </div>
-      <div style="display: flex; gap: 10px; margin-top: 10px;">
-        <button onclick="executeTrimLine()" style="flex:1; background:#d9534f;">✂️ 指定点数を削る</button>
-        <button onclick="closeTrimModal()" style="flex:1; background:#6c757d;">キャンセル</button>
+      <div style="display: flex; gap: 6px; margin-top: 6px;">
+        <button onclick="executeTrimLine()" style="flex:1; background:#d9534f; font-size:10px; padding:4px;">✂️ 実行</button>
+        <button onclick="closeTrimModal()" style="flex:1; background:#6c757d; font-size:10px; padding:4px;">キャンセル</button>
       </div>
     </div>
   </div>
@@ -293,111 +284,100 @@
   <!-- 共有モーダル -->
   <div id="share-modal" class="modal-overlay">
     <div class="modal-content-normal">
-      <h3 style="color: #20c997;">🌐 サーバーに作品を共有</h3>
-      <p style="font-size: 12px; color: #ccc;">作品をクラウドサーバーへ登録し、全員が同じデータベースで閲覧できるようにします。<br><b style="color:#ffcc00;">※共有には15駅以上配置されている必要があります（現在: <span id="share-station-count">0</span>駅）</b></p>
+      <h3 style="color: #20c997; font-size:13px;">🌐 サーバーに共有</h3>
+      <p style="font-size: 11px; color: #ccc;">全員の共通DBに登録します。<br><b style="color:#ffcc00;">※15駅以上必要（現在: <span id="share-station-count">0</span>駅）</b></p>
       <div>
-        <label style="font-size: 11px;">作品名 (空欄の場合は「名無しの作品集」):</label>
-        <input type="text" id="share-work-name" placeholder="例: 三陸海岸高速鉄道網">
+        <label style="font-size: 10px;">作品名:</label>
+        <input type="text" id="share-work-name" placeholder="例: 連絡鉄道網" style="font-size:10px; padding:2px;">
       </div>
       <div>
-        <label style="font-size: 11px;">地域・市町村タグ (カンマ区切り):</label>
-        <input type="text" id="share-work-tags" placeholder="例: 三陸, 湾岸地方">
+        <label style="font-size: 10px;">タグ (カンマ区切り):</label>
+        <input type="text" id="share-work-tags" placeholder="例: 三陸, 湾岸" style="font-size:10px; padding:2px;">
       </div>
-      <div style="display: flex; gap: 10px; margin-top: 10px;">
-        <button onclick="executeShare()" style="flex:1; background:#28a745;">🚀 サーバーに登録</button>
-        <button onclick="closeShareModal()" style="flex:1; background:#6c757d;">キャンセル</button>
+      <div style="display: flex; gap: 6px; margin-top: 6px;">
+        <button onclick="executeShare()" style="flex:1; background:#28a745; font-size:10px; padding:4px;">🚀 登録</button>
+        <button onclick="closeShareModal()" style="flex:1; background:#6c757d; font-size:10px; padding:4px;">キャンセル</button>
       </div>
     </div>
   </div>
 
-  <!-- 閲覧モーダル (ソート・絞り込み対応) -->
+  <!-- 閲覧モーダル -->
   <div id="browse-modal" class="modal-overlay">
     <div class="modal-content-fullscreen">
-      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #444; padding-bottom: 8px;">
-        <h3 style="color: #ffc107;">📖 サーバー共通データベース (作品一覧)</h3>
-        <button onclick="closeBrowseModal()" style="width: auto; padding: 4px 14px; background:#6c757d; font-size:12px;">✖ 閉じる</button>
+      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #444; padding-bottom: 6px;">
+        <h3 style="color: #ffc107; font-size:13px;">📖 サーバー作品一覧</h3>
+        <button onclick="closeBrowseModal()" style="width: auto; padding: 2px 8px; background:#6c757d; font-size:11px;">✖ 閉じる</button>
       </div>
       
-      <div style="display: flex; gap: 8px; background: #1e1e1e; padding: 8px; border-radius: 4px; align-items: center; flex-wrap: wrap;">
-        <div style="flex:2; min-width:180px;">
-          <input type="text" id="search-name-input" placeholder="🔍 作品名で検索..." oninput="renderBrowseWorks()" style="margin:0; font-size:12px;">
-        </div>
-        <div style="flex:2; min-width:180px;">
-          <input type="text" id="search-tag-input" placeholder="🏷️ タグ (地域名) で検索..." oninput="renderBrowseWorks()" style="margin:0; font-size:12px;">
-        </div>
-        <div style="flex:1.5; min-width:140px;">
-          <select id="sort-select" onchange="renderBrowseWorks()" style="margin:0; font-size:12px;">
-            <option value="likes">❤️ いいね数順</option>
-            <option value="stations">🚉 駅数順 (多い順)</option>
-            <option value="newest">🆕 新しさ順 (新しい順)</option>
+      <div style="display: flex; gap: 4px; background: #1e1e1e; padding: 6px; border-radius: 4px; align-items: center; flex-wrap: wrap;">
+        <div style="flex:2; min-width:120px;"><input type="text" id="search-name-input" placeholder="🔍 検索..." oninput="renderBrowseWorks()" style="margin:0; font-size:10px; padding:2px;"></div>
+        <div style="flex:2; min-width:120px;"><input type="text" id="search-tag-input" placeholder="🏷️ タグ..." oninput="renderBrowseWorks()" style="margin:0; font-size:10px; padding:2px;"></div>
+        <div style="flex:1.5; min-width:110px;">
+          <select id="sort-select" onchange="renderBrowseWorks()" style="margin:0; font-size:10px; padding:2px;">
+            <option value="likes">❤️ いいね順</option>
+            <option value="stations">🚉 駅数順</option>
+            <option value="newest">🆕 新しさ順</option>
           </select>
         </div>
-        <div style="flex:1.5; min-width:140px;">
-          <select id="filter-select" onchange="renderBrowseWorks()" style="margin:0; font-size:12px;">
-            <option value="all">🌍 すべての作品</option>
-            <option value="mine">👤 自分が作った作品</option>
-            <option value="liked">❤️ いいねした作品</option>
+        <div style="flex:1.5; min-width:110px;">
+          <select id="filter-select" onchange="renderBrowseWorks()" style="margin:0; font-size:10px; padding:2px;">
+            <option value="all">🌍 すべて</option>
+            <option value="mine">👤 自作</option>
+            <option value="liked">❤️ いいね済</option>
           </select>
         </div>
       </div>
-
-      <p style="font-size: 11px; color: #aaa;">サーバー上の共通データベースから取得しています。「いいね」を押すと「いいねした作品」に絞り込めるようになります。</p>
       
       <div id="browse-works-container" class="works-grid-container">
-        <div style="grid-column: span 5; text-align: center; color: #888; padding: 40px;">サーバーから作品データを取得中...</div>
+        <div style="grid-column: span 5; text-align: center; color: #888; padding: 20px; font-size:11px;">データ取得中...</div>
       </div>
     </div>
   </div>
 
   <!-- プレビューモーダル -->
   <div id="preview-modal" class="modal-overlay">
-    <div class="modal-content-normal" style="max-width: 900px; height: 80vh;">
-      <h3 id="preview-title" style="color: #00aaff;">👁️ 作品プレビュー</h3>
-      <div id="preview-map-container" style="flex: 1; background: #111; border-radius: 6px; overflow: hidden; position: relative;">
-        <div style="display:flex; justify-content:center; align-items:center; height:100%; color:#888;">プレビュー読み込み中...</div>
-      </div>
-      <div style="display: flex; justify-content: flex-end; margin-top: 10px;">
-        <button onclick="closePreviewModal()" style="width: auto; padding: 6px 20px; background:#6c757d;">閉じる</button>
+    <div class="modal-content-normal" style="max-width: 800px; height: 75vh;">
+      <h3 id="preview-title" style="color: #00aaff; font-size:13px;">👁️ プレビュー</h3>
+      <div id="preview-map-container" style="flex: 1; background: #111; border-radius: 4px; overflow: hidden; position: relative;"></div>
+      <div style="display: flex; justify-content: flex-end; margin-top: 6px;">
+        <button onclick="closePreviewModal()" style="width: auto; padding: 4px 12px; background:#6c757d; font-size:10px;">閉じる</button>
       </div>
     </div>
   </div>
 
   <!-- 画像出力モーダル -->
   <div id="capture-modal" class="modal-overlay">
-    <div class="modal-content-normal" style="max-width: 800px; height: 85vh;">
-      <h3 style="margin-bottom: 10px; color: #00aaff;">🗺️ 路線図出力プレビュー</h3>
-      <div class="tab-btn-group" style="display:flex; gap:5px; margin-bottom:10px;">
-        <button id="tab-deformed-btn" class="active" onclick="switchCaptureTab('deformed')" style="flex:1; padding:8px;">📐 簡略路線図 (デフォルメ)</button>
-        <button id="tab-real-btn" onclick="switchCaptureTab('real')" style="flex:1; padding:8px;">🗺️ 実地図そのまま</button>
+    <div class="modal-content-normal" style="max-width: 700px; height: 80vh;">
+      <h3 style="margin-bottom: 6px; color: #00aaff; font-size:13px;">🗺️ 路線図出力</h3>
+      <div class="tab-btn-group" style="display:flex; gap:4px; margin-bottom:6px;">
+        <button id="tab-deformed-btn" class="active" onclick="switchCaptureTab('deformed')" style="flex:1; padding:4px; font-size:10px;">📐 デフォルメ</button>
+        <button id="tab-real-btn" onclick="switchCaptureTab('real')" style="flex:1; padding:4px; font-size:10px;">🗺️ 実地図</button>
       </div>
-      <div style="display:flex; gap:6px; align-items:center; margin-bottom:8px; background:#1e1e1e; padding:4px 8px; border-radius:4px;">
-        <span style="font-size:12px; color:#aaa;">ズーム:</span>
-        <button onclick="zoomPreview(0.2)" style="width:auto; padding:4px 10px;">🔍 (+)</button>
-        <button onclick="zoomPreview(-0.2)" style="width:auto; padding:4px 10px;">🔍 (-)</button>
-        <button onclick="resetZoomPreview()" style="width:auto; padding:4px 10px;">🔄 リセット</button>
-        <span id="zoom-level-label" style="font-size:11px; color:#00aaff; margin-left:6px;">100%</span>
+      <div style="display:flex; gap:4px; align-items:center; margin-bottom:6px; background:#1e1e1e; padding:3px 6px; border-radius:3px;">
+        <span style="font-size:10px; color:#aaa;">ズーム:</span>
+        <button onclick="zoomPreview(0.2)" style="width:auto; padding:2px 6px; font-size:10px;">(+)</button>
+        <button onclick="zoomPreview(-0.2)" style="width:auto; padding:2px 6px; font-size:10px;">(-)</button>
+        <button onclick="resetZoomPreview()" style="width:auto; padding:2px 6px; font-size:10px;">リセット</button>
+        <span id="zoom-level-label" style="font-size:10px; color:#00aaff; margin-left:4px;">100%</span>
       </div>
-      <div id="captured-container" style="flex:1; background:#111; border:1px solid #444; border-radius:4px; overflow:hidden; position:relative; display:flex; justify-content:center; align-items:center;">
+      <div id="captured-container" style="flex:1; background:#111; border:1px solid #444; border-radius:3px; overflow:hidden; position:relative; display:flex; justify-content:center; align-items:center;">
         <div id="zoom-wrapper" style="transform-origin: center center; display:flex; justify-content:center; align-items:center;">
           <canvas id="deformed-canvas"></canvas>
           <img id="captured-image" src="" alt="Route Map" style="display:none;">
         </div>
       </div>
-      <div style="display: flex; gap: 10px; margin-top: 15px;">
-        <button onclick="downloadCurrentCapture()" style="flex:1; background: #28a745;">💾 ダウンロード (PNG)</button>
-        <button onclick="closeCaptureModal()" style="flex:1; background: #6c757d;">閉じる</button>
+      <div style="display: flex; gap: 6px; margin-top: 10px;">
+        <button onclick="downloadCurrentCapture()" style="flex:1; background: #28a745; font-size:10px; padding:6px;">💾 保存 (PNG)</button>
+        <button onclick="closeCaptureModal()" style="flex:1; background: #6c757d; font-size:10px; padding:6px;">閉じる</button>
       </div>
     </div>
   </div>
 
   <script>
-    // --- サーバー共通データベース・高度フィルタ＆ソート版エディタ (v4.49) ---
+    // --- モバイルコンパクト対応エディタ (v4.50) ---
 
-    // 全員同一のサーバーDBとして利用する公開JSONBin API（グローバル共有ストレージ）
     const CLOUD_API_BIN_URL = 'https://api.jsonbin.io/v3/b/66185c78ad19ca34f860273a';
-    const CLOUD_API_MASTER_KEY = '$2a$10$7Z8Kq9Z8Kq9Z8Kq9Z8Kq9O... (公共パブリックキー)'; // 自動同期用
 
-    // ユーザー固有の端末IDと、自分が作った作品IDのリスト、いいねリストを管理
     let myUserId = localStorage.getItem('transit_my_user_id');
     if (!myUserId) {
       myUserId = 'user_' + Math.random().toString(36).substring(2, 10);
@@ -405,14 +385,12 @@
     }
     let myCreatedWorkIds = JSON.parse(localStorage.getItem('transit_my_created_works') || '{}');
     let userLikedWorks = JSON.parse(localStorage.getItem('transit_user_likes') || '{}');
-
-    // サーバーから取得した全作品キャッシュ
     let serverWorksCache = [];
 
     async function dbFetchAllWorksFromServer() {
       try {
         let res = await fetch(CLOUD_API_BIN_URL, {
-          headers: { 'X-Access-Key': '$2a$10$7Z8Kq9Z8Kq9Z8Kq9Z8Kq9O...' } // 標準公開ストレージ権限
+          headers: { 'X-Access-Key': '$2a$10$7Z8Kq9Z8Kq9Z8Kq9Z8Kq9O...' }
         });
         if (!res.ok) throw new Error('サーバー接続エラー');
         let data = await res.json();
@@ -420,8 +398,6 @@
         serverWorksCache = works;
         return works;
       } catch (e) {
-        console.warn('サーバー接続失敗、ローカルキャッシュを利用します:', e);
-        // オフライン時のフォールバックとしてローカルストレージも併用
         let localFallback = [];
         for(let i=0; i<localStorage.length; i++) {
           let k = localStorage.key(i);
@@ -435,7 +411,6 @@
 
     async function dbSaveWorkToServer(workData) {
       try {
-        // 現在のサーバーデータを取得してマージ
         let currentWorks = await dbFetchAllWorksFromServer();
         let existingIdx = currentWorks.findIndex(w => w.id === workData.id);
         if (existingIdx >= 0) {
@@ -444,7 +419,6 @@
           currentWorks.unshift(workData);
         }
 
-        // サーバーへ送信
         let res = await fetch(CLOUD_API_BIN_URL, {
           method: 'PUT',
           headers: {
@@ -453,11 +427,10 @@
           },
           body: JSON.stringify({ works: currentWorks })
         });
-        if (!res.ok) throw new Error('サーバー保存に失敗しました');
+        if (!res.ok) throw new Error('サーバー保存失敗');
         serverWorksCache = currentWorks;
         return true;
       } catch (e) {
-        console.warn('サーバー保存エラー。ローカルフォールバックに保存します:', e);
         localStorage.setItem(`fallback_work_${workData.id}`, JSON.stringify(workData));
         return true;
       }
@@ -492,13 +465,13 @@
         after += l.points.length;
         updateLinePolylines(l);
       });
-      alert(`🧹 間引き間隔 [${interval}m] で整理しました！\n（総ポイント数: ${before}点 ➔ ${after}点 に軽量化）`);
+      alert(`🧹 間引き間隔 [${interval}m] で整理しました！\n（総ポイント数: ${before}点 ➔ ${after}点）`);
     }
 
     const map = L.map('map', { dragging: true, preferCanvas: true }).setView([39.45, 141.95], 10);
 
     L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png', {
-      attribution: '&copy; <a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank">国土地理院</a>',
+      attribution: '&copy; 国土地理院',
       maxZoom: 18,
       crossOrigin: true,
       errorTileUrl: ''
@@ -537,15 +510,15 @@
       let expName = activeExp ? activeExp.name : '各駅停車';
 
       switch (mode) {
-        case 'pan': guideText = "💡 【地図移動】マウスドラッグで地図を自由に移動できます。（駅クリックで駅名変更）"; break;
-        case 'plan': guideText = "💡 【計画線・延長モード】ドラッグで点設置 ｜ [Shift]キー: ロック切替"; break;
-        case 'express-config': guideText = `⚡ 【${expName} の停車・通過設定】マップ上の駅をクリックすると、この種別専用のステータスが切り替わります！`; break;
-        case 'station': guideText = "💡 【駅配置】クリックで駅配置"; break;
-        case 'transfer': guideText = "🔄 【乗換統合 (代表駅化)】統合したい2つの駅を順番にクリックしてください！"; break;
-        case 'start': guideText = "🟢 【始点設定】マップ上の駅をクリックして列車の始点に設定"; break;
-        case 'via': guideText = "🟨 【経由地設定】(任意) マップ上の駅をクリックして経由地に追加"; break;
-        case 'end': guideText = "🔴 【終点設定】マップ上の駅をクリックして列車の終点に設定"; break;
-        default: guideText = "💡 モードに応じた操作を行います。"; break;
+        case 'pan': guideText = "✋ 地図移動"; break;
+        case 'plan': guideText = "📐 計画線 (ドラッグ)"; break;
+        case 'express-config': guideText = `⚡ ${expName} 設定`; break;
+        case 'station': guideText = "🚉 駅配置"; break;
+        case 'transfer': guideText = "🔄 乗換統合"; break;
+        case 'start': guideText = "🟢 始点設定"; break;
+        case 'via': guideText = "🟨 経由設定"; break;
+        case 'end': guideText = "🔴 終点設定"; break;
+        default: guideText = "💡 操作中"; break;
       }
       box.innerHTML = `<span>${guideText}</span>`;
     }
@@ -556,14 +529,14 @@
     function toggleTracking() {
       isTracking = !isTracking;
       const btn = document.getElementById('track-btn');
-      btn.innerText = isTracking ? '🎥 追尾 ON' : '🎥 追尾 OFF';
+      btn.innerText = isTracking ? '🎥 追尾ON' : '🎥 追尾';
       btn.classList.toggle('toggle-on', isTracking);
     }
 
     function toggleAudio() {
       isAudioOn = !isAudioOn;
       const btn = document.getElementById('audio-btn');
-      btn.innerText = isAudioOn ? '🔊 アナウンス ON' : '🔊 アナウンス OFF';
+      btn.innerText = isAudioOn ? '🔊 音声ON' : '🔊 音声';
       btn.classList.toggle('toggle-on', isAudioOn);
     }
 
@@ -624,35 +597,12 @@
           subDistances.push(totalDist);
         }
 
-        let curvaturePenalty = 1.0;
-        for (let j = 1; j < rawPoints.length - 1; j++) {
-          let p0 = rawPoints[j-1], p1 = rawPoints[j], p2 = rawPoints[j+1];
-          let v1 = { x: p1.lng - p0.lng, y: p1.lat - p0.lat };
-          let v2 = { x: p2.lng - p1.lng, y: p2.lat - p1.lat };
-          let dot = v1.x * v2.x + v1.y * v2.y;
-          let l1 = Math.sqrt(v1.x*v1.x + v1.y*v1.y), l2 = Math.sqrt(v2.x*v2.x + v2.y*v2.y);
-          if (l1 > 0 && l2 > 0) {
-            let cosTh = Math.max(-1, Math.min(1, dot / (l1 * l2)));
-            if (cosTh < 0.95) curvaturePenalty += 0.05;
-          }
-        }
-
-        let maxSpeedMps = ((t.speedKmH || 60) * 1000) / 3600 / curvaturePenalty;
-        
+        let maxSpeedMps = ((t.speedKmH || 60) * 1000) / 3600;
         segments.push({
-          fromStation: fromSt,
-          toStation: toSt,
-          points: rawPoints,
-          subDistances: subDistances,
-          totalDistance: totalDist || 1,
-          maxSpeed: maxSpeedMps,
-          stopTime: (i < timetable.length - 2) ? (t.stopTimeSec || 3) * 20 : 0
+          fromStation: fromSt, toStation: toSt, points: rawPoints,
+          subDistances: subDistances, totalDistance: totalDist || 1,
+          maxSpeed: maxSpeedMps, stopTime: (i < timetable.length - 2) ? (t.stopTimeSec || 3) * 20 : 0
         });
-      }
-
-      if (segments.length === 0) {
-        alert('有効な走行セグメントが見つかりませんでした。');
-        return;
       }
 
       testRunState.segments = segments;
@@ -662,7 +612,7 @@
       testRunState.isRunning = true;
 
       const btn = document.getElementById('test-run-btn');
-      btn.innerText = '⏹ 試運転停止';
+      btn.innerText = '⏹ 停止';
       btn.style.background = '#d9534f';
       btn.style.color = '#fff';
 
@@ -671,8 +621,8 @@
         t.marker = L.marker(initPt, {
           icon: L.divIcon({
             className: 'custom-train-icon',
-            html: `<div class="train-marker" title="${t.name}"></div>`,
-            iconSize: [18, 18], iconAnchor: [9, 9]
+            html: `<div class="train-marker"></div>`,
+            iconSize: [14, 14], iconAnchor: [7, 7]
           })
         }).addTo(map);
       } else {
@@ -682,7 +632,6 @@
 
       testRunState.timer = setInterval(() => {
         if (!testRunState.isRunning) return;
-
         let seg = testRunState.segments[testRunState.currentSegIdx];
 
         if (testRunState.stopTimer > 0) {
@@ -690,29 +639,16 @@
           if (testRunState.stopTimer === 0) {
             testRunState.currentSegIdx++;
             testRunState.currentSegDist = 0;
-            
             if (testRunState.currentSegIdx >= testRunState.segments.length) {
               stopTestRun();
-              alert('試運転が完了しました！');
+              alert('試運転完了！');
             }
           }
           return;
         }
 
         let d = testRunState.currentSegDist;
-        let rem = seg.totalDistance - d;
-        let accelDist = Math.min(seg.totalDistance * 0.25, 200); 
-        let decelDist = Math.min(seg.totalDistance * 0.25, 200); 
-
-        let currentSpeed = seg.maxSpeed;
-        if (d < accelDist) {
-          currentSpeed *= Math.max(0.05, d / accelDist);
-        } else if (rem < decelDist) {
-          currentSpeed *= Math.max(0.05, rem / decelDist);
-        }
-        currentSpeed = Math.max(currentSpeed, 1.5);
-
-        let stepDist = currentSpeed * 0.05;
+        let stepDist = seg.maxSpeed * 0.05;
         testRunState.currentSegDist += stepDist;
 
         if (testRunState.currentSegDist >= seg.totalDistance) {
@@ -728,7 +664,7 @@
             testRunState.currentSegDist = 0;
             if (testRunState.currentSegIdx >= testRunState.segments.length) {
               stopTestRun();
-              alert('試運転が完了しました！');
+              alert('試運転完了！');
             }
           }
           return;
@@ -743,21 +679,15 @@
           }
         }
 
-        let dStart = seg.subDistances[pIdx];
-        let dEnd = seg.subDistances[pIdx+1];
+        let dStart = seg.subDistances[pIdx], dEnd = seg.subDistances[pIdx+1];
         let ratio = (dEnd - dStart > 0) ? (targetDist - dStart) / (dEnd - dStart) : 0;
-
-        let ptA = seg.points[pIdx];
-        let ptB = seg.points[pIdx+1];
+        let ptA = seg.points[pIdx], ptB = seg.points[pIdx+1];
         let curLat = ptA.lat + (ptB.lat - ptA.lat) * ratio;
         let curLng = ptA.lng + (ptB.lng - ptA.lng) * ratio;
         let currentLatLng = L.latLng(curLat, curLng);
 
         t.marker.setLatLng(currentLatLng);
-        if (isTracking) {
-          map.panTo(currentLatLng, { animate: true, duration: 0.05 });
-        }
-
+        if (isTracking) map.panTo(currentLatLng, { animate: true, duration: 0.05 });
       }, 50);
     }
 
@@ -765,7 +695,7 @@
       testRunState.isRunning = false;
       if (testRunState.timer) clearInterval(testRunState.timer);
       const btn = document.getElementById('test-run-btn');
-      btn.innerText = '▶ 試運転開始';
+      btn.innerText = '▶ 試運転';
       btn.style.background = '#00ffcc';
       btn.style.color = '#000';
     }
@@ -773,12 +703,10 @@
     function openShareModal() {
       let currentStationCount = stations.length;
       document.getElementById('share-station-count').innerText = currentStationCount;
-      
       if (currentStationCount < 15) {
-        alert(`サーバー共有には【15駅以上】が必要です。（現在の駅数: ${currentStationCount}駅）`);
+        alert(`サーバー共有には【15駅以上】必要です。（現在: ${currentStationCount}駅）`);
         return;
       }
-
       document.getElementById('share-modal').style.display = 'flex';
       document.getElementById('share-work-name').value = '';
       document.getElementById('share-work-tags').value = '';
@@ -787,70 +715,43 @@
 
     async function executeShare() {
       try {
-        if (stations.length < 15) {
-          alert('駅数が15駅未満のため共有できません。');
-          closeShareModal();
-          return;
-        }
-
+        if (stations.length < 15) return alert('15駅未満のため共有できません。');
         let titleInput = document.getElementById('share-work-name').value.trim();
         let tagsInput = document.getElementById('share-work-tags').value.trim();
         let interval = parseFloat(document.getElementById('simplify-distance-input').value) || 50;
         
-        let title = titleInput || '名無しの作品集';
+        let title = titleInput || '名無しの作品';
         let tags = tagsInput ? tagsInput.split(',').map(t => t.trim()).filter(Boolean) : [];
 
-        let optimizedLines = lines.map(l => {
-          let simplified = simplifyPoints(l.points, interval);
-          return {
-            id: l.id,
-            name: l.name,
-            color: l.color,
-            folderId: l.folderId,
-            isBranch: l.isBranch,
-            points: simplified.map(p => [Number((p.lat || p[0]).toFixed(5)), Number((p.lng || p[1]).toFixed(5))])
-          };
-        });
+        let optimizedLines = lines.map(l => ({
+          id: l.id, name: l.name, color: l.color, folderId: l.folderId, isBranch: l.isBranch,
+          points: simplifyPoints(l.points, interval).map(p => [Number((p.lat || p[0]).toFixed(5)), Number((p.lng || p[1]).toFixed(5))])
+        }));
 
         let optimizedStations = stations.map(s => ({
-          id: s.id,
-          name: s.name,
+          id: s.id, name: s.name,
           latlng: [Number(s.latlng.lat.toFixed(5)), Number(s.latlng.lng.toFixed(5))],
-          isHub: s.isHub || false,
-          mergedStationIds: s.mergedStationIds || [],
-          connectedLineIds: s.connectedLineIds || []
+          isHub: s.isHub || false, mergedStationIds: s.mergedStationIds || [], connectedLineIds: s.connectedLineIds || []
         }));
 
         let workId = 'work_' + Date.now();
         let workData = {
-          id: workId,
-          authorId: myUserId,
-          title: title,
-          tags: tags,
-          likes: 0,
-          stationCount: optimizedStations.length,
-          timestamp: Date.now(),
+          id: workId, authorId: myUserId, title, tags, likes: 0,
+          stationCount: optimizedStations.length, timestamp: Date.now(),
           payload: {
             folders: folders.map(f => ({ id: f.id, name: f.name, color: f.color, isBranchFolder: f.isBranchFolder })),
-            lines: optimizedLines,
-            stations: optimizedStations,
-            expressTypes,
-            expressStops
+            lines: optimizedLines, stations: optimizedStations, expressTypes, expressStops
           }
         };
 
         await dbSaveWorkToServer(workData);
-        
-        // 自分が作った作品として記録
         myCreatedWorkIds[workId] = true;
         localStorage.setItem('transit_my_created_works', JSON.stringify(myCreatedWorkIds));
 
         closeShareModal();
-        alert(`「${title}」をサーバー共通データベースへ登録しました！`);
-
+        alert(`「${title}」をサーバーに共有しました！`);
       } catch (err) {
-        console.error('サーバー共有エラー:', err);
-        alert(`❌ 【サーバー共有に失敗しました】\n原因: ${err.message || err}`);
+        alert('共有エラー: ' + err.message);
       }
     }
 
@@ -859,7 +760,6 @@
       document.getElementById('search-tag-input').value = '';
       document.getElementById('sort-select').value = 'likes';
       document.getElementById('filter-select').value = 'all';
-      
       document.getElementById('browse-modal').style.display = 'flex';
       await renderBrowseWorks();
     }
@@ -868,50 +768,34 @@
 
     async function renderBrowseWorks() {
       let container = document.getElementById('browse-works-container');
-      container.innerHTML = '<div style="grid-column: span 5; text-align: center; color: #888; padding: 40px;">サーバーから作品データを取得中...</div>';
+      container.innerHTML = '<div style="grid-column: span 5; text-align: center; color: #888; padding: 20px; font-size:11px;">読込中...</div>';
 
       let allWorks = await dbFetchAllWorksFromServer();
-
       let nameQuery = document.getElementById('search-name-input').value.trim().toLowerCase();
       let tagQuery = document.getElementById('search-tag-input').value.trim().toLowerCase();
       let sortBy = document.getElementById('sort-select').value;
       let filterBy = document.getElementById('filter-select').value;
 
-      // 1. フィルタリング (検索・絞り込み)
       let filtered = allWorks.filter(w => {
         let matchName = w.title.toLowerCase().includes(nameQuery);
         let matchTag = tagQuery === '' || (w.tags && w.tags.some(t => t.toLowerCase().includes(tagQuery)));
-        
         if (!matchName || !matchTag) return false;
 
-        if (filterBy === 'mine') {
-          // 自分が作った作品
-          return myCreatedWorkIds[w.id] || w.authorId === myUserId;
-        } else if (filterBy === 'liked') {
-          // いいねした作品
-          return !!userLikedWorks[w.id];
-        }
+        if (filterBy === 'mine') return myCreatedWorkIds[w.id] || w.authorId === myUserId;
+        if (filterBy === 'liked') return !!userLikedWorks[w.id];
         return true;
       });
 
-      // 2. ソート (並び替え)
       filtered.sort((a, b) => {
-        if (sortBy === 'likes') {
-          return (b.likes || 0) - (a.likes || 0);
-        } else if (sortBy === 'stations') {
-          let countA = a.stationCount || (a.payload && a.payload.stations ? a.payload.stations.length : 0);
-          let countB = b.stationCount || (b.payload && b.payload.stations ? b.payload.stations.length : 0);
-          return countB - countA;
-        } else if (sortBy === 'newest') {
-          return (b.timestamp || 0) - (a.timestamp || 0);
-        }
+        if (sortBy === 'likes') return (b.likes || 0) - (a.likes || 0);
+        if (sortBy === 'stations') return (b.stationCount || 0) - (a.stationCount || 0);
+        if (sortBy === 'newest') return (b.timestamp || 0) - (a.timestamp || 0);
         return 0;
       });
 
       container.innerHTML = '';
-
       if (filtered.length === 0) {
-        container.innerHTML = '<p style="font-size: 12px; color: #888; text-align: center; grid-column: span 5; padding: 40px;">条件に該当する作品がサーバーに見つかりません。</p>';
+        container.innerHTML = '<p style="font-size: 11px; color: #888; text-align: center; grid-column: span 5; padding: 20px;">該当する作品なし</p>';
         return;
       }
 
@@ -927,19 +811,19 @@
         card.innerHTML = `
           <div>
             <div class="work-card-header">
-              <b style="font-size: 12px; color: #00ffcc; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:110px;" title="${w.title}">${w.title}</b>
-              <span style="font-size: 10px; color: #aaa;">❤️ ${w.likes || 0}</span>
+              <b style="font-size: 11px; color: #00ffcc; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:90px;" title="${w.title}">${w.title}</b>
+              <span style="font-size: 9px; color: #aaa;">❤️ ${w.likes || 0}</span>
             </div>
-            <div style="font-size: 10px; color: #ffcc00; margin:2px 0;">🚉 ${sCount}駅 ${isMine ? '<span>[自作]</span>' : ''}</div>
-            <div style="margin:2px 0; height:20px; overflow:hidden;">${tagsHtml || '<span style="font-size:9px; color:#666;">タグなし</span>'}</div>
+            <div style="font-size: 9px; color: #ffcc00; margin:1px 0;">🚉 ${sCount}駅 ${isMine ? '[自作]' : ''}</div>
+            <div style="height:16px; overflow:hidden;">${tagsHtml}</div>
           </div>
-          <div style="display: flex; flex-direction: column; gap: 3px; margin-top: 4px;">
-            <button onclick="toggleLikeWork('${w.id}')" style="font-size:9px; padding:2px 4px; background:${isLiked ? '#d9534f' : '#333'}; border:1px solid #777;">
-              ${isLiked ? '❤️ いいね解除' : '🤍 いいねする'}
+          <div style="display: flex; flex-direction: column; gap: 2px;">
+            <button onclick="toggleLikeWork('${w.id}')" style="font-size:8px; padding:2px; background:${isLiked ? '#d9534f' : '#333'};">
+              ${isLiked ? '❤️ 解除' : '🤍 いいね'}
             </button>
-            <button onclick="previewWork('${w.id}')" style="font-size:9px; padding:2px 4px; background:#17a2b8;">👁️ プレビュー</button>
-            <button onclick="loadWorkToEditor('${w.id}', 'overwrite')" style="font-size:9px; padding:2px 4px; background:${isLiked || isMine ? '#28a745' : '#555'}; ${isLiked || isMine ? '' : 'opacity:0.7;'}" title="上書き読込">
-              📂 上書き読込
+            <button onclick="previewWork('${w.id}')" style="font-size:8px; padding:2px; background:#17a2b8;">👁️ プレビュー</button>
+            <button onclick="loadWorkToEditor('${w.id}', 'overwrite')" style="font-size:8px; padding:2px; background:${isLiked || isMine ? '#28a745' : '#555'};">
+              📂 読込
             </button>
           </div>
         `;
@@ -978,17 +862,8 @@
       setTimeout(() => {
         let subMap = L.map('sub-map').setView([39.45, 141.95], 10);
         L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png', { maxZoom: 18, crossOrigin: true }).addTo(subMap);
-        
-        if (work.payload.stations) {
-          work.payload.stations.forEach(s => {
-            L.marker(s.latlng).addTo(subMap).bindTooltip(s.name, { permanent: true });
-          });
-        }
-        if (work.payload.lines) {
-          work.payload.lines.forEach(l => {
-            L.polyline(l.points, { color: l.color, weight: 4 }).addTo(subMap);
-          });
-        }
+        if (work.payload.stations) work.payload.stations.forEach(s => L.marker(s.latlng).addTo(subMap).bindTooltip(s.name, {permanent:true}));
+        if (work.payload.lines) work.payload.lines.forEach(l => L.polyline(l.points, {color: l.color, weight: 3}).addTo(subMap));
       }, 200);
     }
 
@@ -1001,7 +876,7 @@
       
       let isMine = myCreatedWorkIds[workId] || work.authorId === myUserId;
       if (!userLikedWorks[workId] && !isMine) {
-        alert('他の人が作った作品を読み込むには、まず「いいね」を押してください！');
+        alert('他の人の作品を読み込むには、まず「いいね」を押してください！');
         return;
       }
 
@@ -1014,91 +889,43 @@
       }
 
       let data = work.payload;
-      if (data.expressTypes) {
-        data.expressTypes.forEach(et => {
-          if (!expressTypes.some(x => x.name === et.name)) expressTypes.push(et);
-        });
-      }
-      if (data.expressStops) {
-        for (let k in data.expressStops) {
-          if (!expressStops[k]) expressStops[k] = {};
-          Object.assign(expressStops[k], data.expressStops[k]);
-        }
-      }
-      if (data.folders) {
-        data.folders.forEach(f => {
-          if (!folders.some(x => x.id === f.id)) folders.push(f);
-        });
-      }
-      if (data.lines) {
-        data.lines.forEach(l => {
-          l.points = l.points.map(p => L.latLng(p[0], p[1]));
-          lines.push(l);
-          updateLinePolylines(l);
-        });
-      }
-      if (data.stations) {
-        data.stations.forEach(s => {
-          const latlng = Array.isArray(s.latlng) ? L.latLng(s.latlng[0], s.latlng[1]) : s.latlng;
-          const marker = L.marker(latlng, { icon: createStationMarkerIcon('各駅停車', s.isHub, 'stop'), draggable: true }).addTo(map);
-          marker.bindTooltip(s.name, { permanent: true, direction: 'top' });
-          let newSt = { id: s.id || (Date.now() + Math.random()), name: s.name, marker, latlng: marker.getLatLng(), isHub: s.isHub || false, mergedStationIds: s.mergedStationIds || [], connectedLineIds: s.connectedLineIds || [] };
-          stations.push(newSt);
-          marker.on('click', (evt) => handleStationClick(evt, newSt));
-        });
-      }
+      if (data.expressTypes) data.expressTypes.forEach(et => { if (!expressTypes.some(x => x.name === et.name)) expressTypes.push(et); });
+      if (data.expressStops) for (let k in data.expressStops) { if (!expressStops[k]) expressStops[k] = {}; Object.assign(expressStops[k], data.expressStops[k]); }
+      if (data.folders) data.folders.forEach(f => { if (!folders.some(x => x.id === f.id)) folders.push(f); });
+      if (data.lines) data.lines.forEach(l => { l.points = l.points.map(p => L.latLng(p[0], p[1])); lines.push(l); updateLinePolylines(l); });
+      if (data.stations) data.stations.forEach(s => {
+        const latlng = Array.isArray(s.latlng) ? L.latLng(s.latlng[0], s.latlng[1]) : s.latlng;
+        const marker = L.marker(latlng, { icon: createStationMarkerIcon('各駅停車', s.isHub, 'stop'), draggable: true }).addTo(map);
+        marker.bindTooltip(s.name, { permanent: true, direction: 'top' });
+        let newSt = { id: s.id || (Date.now()+Math.random()), name: s.name, marker, latlng: marker.getLatLng(), isHub: s.isHub||false, mergedStationIds: s.mergedStationIds||[], connectedLineIds: s.connectedLineIds||[] };
+        stations.push(newSt);
+        marker.on('click', (evt) => handleStationClick(evt, newSt));
+      });
 
       sortExpressTypes();
       renderLineList();
       if (trainList.length === 0) addNewTrain();
       closeBrowseModal();
-      alert(`サーバーから作品「${work.title}」を${mode === 'overwrite' ? '上書き' : '追加'}読み込みしました！`);
+      alert(`「${work.title}」を読み込みました！`);
     }
 
     function exportJSON() {
       let interval = parseFloat(document.getElementById('simplify-distance-input').value) || 50;
-      const optimizedLines = lines.map(l => {
-        let simplified = simplifyPoints(l.points, interval);
-        return {
-          id: l.id,
-          name: l.name,
-          color: l.color,
-          folderId: l.folderId,
-          isBranch: l.isBranch,
-          points: simplified.map(p => [Number((p.lat || p[0]).toFixed(5)), Number((p.lng || p[1]).toFixed(5))])
-        };
-      });
-
-      const optimizedStations = stations.map(s => ({
-        id: s.id,
-        name: s.name,
-        latlng: [Number(s.latlng.lat.toFixed(5)), Number(s.latlng.lng.toFixed(5))],
-        isHub: s.isHub || false,
-        mergedStationIds: s.mergedStationIds || [],
-        connectedLineIds: s.connectedLineIds || []
+      const optimizedLines = lines.map(l => ({
+        id: l.id, name: l.name, color: l.color, folderId: l.folderId, isBranch: l.isBranch,
+        points: simplifyPoints(l.points, interval).map(p => [Number((p.lat || p[0]).toFixed(5)), Number((p.lng || p[1]).toFixed(5))])
       }));
-
-      const data = {
-        folders: folders.map(f => ({ id: f.id, name: f.name, color: f.color, isBranchFolder: f.isBranchFolder })),
-        lines: optimizedLines,
-        stations: optimizedStations,
-        expressTypes,
-        expressStops,
-        fontData: {}
-      };
-
+      const optimizedStations = stations.map(s => ({
+        id: s.id, name: s.name, latlng: [Number(s.latlng.lat.toFixed(5)), Number(s.latlng.lng.toFixed(5))],
+        isHub: s.isHub || false, mergedStationIds: s.mergedStationIds || [], connectedLineIds: s.connectedLineIds || []
+      }));
+      const data = { folders: folders.map(f => ({ id: f.id, name: f.name, color: f.color, isBranchFolder: f.isBranchFolder })), lines: optimizedLines, stations: optimizedStations, expressTypes, expressStops, fontData: {} };
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `train_editor_rias_${Date.now()}.json`;
-      a.click();
-      alert(`間引き間隔 [${interval}m] で調整してJSON保存しました！`);
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `train_editor_${Date.now()}.json`; a.click();
     }
 
     function importJSON(mode) {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = '.json';
+      const input = document.createElement('input'); input.type = 'file'; input.accept = '.json';
       input.onchange = (e) => {
         const reader = new FileReader();
         reader.onload = (event) => {
@@ -1111,57 +938,30 @@
               expressTypes = [{ id: 'express_local_fixed', name: '各駅停車', color: '#007acc', isFixed: true }]; 
               expressStops = {};
             }
-            if (data.expressTypes) {
-              data.expressTypes.forEach(et => {
-                if (!expressTypes.some(x => x.name === et.name)) expressTypes.push(et);
-              });
-            }
-            if (data.expressStops) {
-              for (let k in data.expressStops) {
-                if (!expressStops[k]) expressStops[k] = {};
-                Object.assign(expressStops[k], data.expressStops[k]);
-              }
-            }
-            if (data.folders) {
-              data.folders.forEach(f => {
-                if (!folders.some(x => x.id === f.id)) folders.push(f);
-              });
-            }
-            if (data.lines) {
-              data.lines.forEach(l => {
-                l.points = l.points.map(p => L.latLng(p[0], p[1]));
-                lines.push(l);
-                updateLinePolylines(l);
-              });
-            }
-            if (data.stations) {
-              data.stations.forEach(s => {
-                const latlng = Array.isArray(s.latlng) ? L.latLng(s.latlng[0], s.latlng[1]) : s.latlng;
-                const marker = L.marker(latlng, { icon: createStationMarkerIcon('各駅停車', s.isHub, 'stop'), draggable: true }).addTo(map);
-                marker.bindTooltip(s.name, { permanent: true, direction: 'top' });
-                let newSt = { id: s.id || (Date.now() + Math.random()), name: s.name, marker, latlng: marker.getLatLng(), isHub: s.isHub || false, mergedStationIds: s.mergedStationIds || [], connectedLineIds: s.connectedLineIds || [] };
-                stations.push(newSt);
-                marker.on('click', (evt) => handleStationClick(evt, newSt));
-              });
-            }
+            if (data.expressTypes) data.expressTypes.forEach(et => { if (!expressTypes.some(x => x.name === et.name)) expressTypes.push(et); });
+            if (data.expressStops) for (let k in data.expressStops) { if (!expressStops[k]) expressStops[k] = {}; Object.assign(expressStops[k], data.expressStops[k]); }
+            if (data.folders) data.folders.forEach(f => { if (!folders.some(x => x.id === f.id)) folders.push(f); });
+            if (data.lines) data.lines.forEach(l => { l.points = l.points.map(p => L.latLng(p[0], p[1])); lines.push(l); updateLinePolylines(l); });
+            if (data.stations) data.stations.forEach(s => {
+              const latlng = Array.isArray(s.latlng) ? L.latLng(s.latlng[0], s.latlng[1]) : s.latlng;
+              const marker = L.marker(latlng, { icon: createStationMarkerIcon('各駅停車', s.isHub, 'stop'), draggable: true }).addTo(map);
+              marker.bindTooltip(s.name, { permanent: true, direction: 'top' });
+              let newSt = { id: s.id || (Date.now()+Math.random()), name: s.name, marker, latlng: marker.getLatLng(), isHub: s.isHub||false, mergedStationIds: s.mergedStationIds||[], connectedLineIds: s.connectedLineIds||[] };
+              stations.push(newSt);
+              marker.on('click', (evt) => handleStationClick(evt, newSt));
+            });
             sortExpressTypes();
             renderLineList();
             if (trainList.length === 0) addNewTrain();
-            alert(mode === 'overwrite' ? '上書き読み込みしました！' : '追加読み込みしました！');
-          } catch (err) {
-            alert('JSONファイルの読み込みに失敗しました。');
-          }
+            alert('読込完了！');
+          } catch (err) { alert('読込失敗'); }
         };
         reader.readAsText(e.target.files[0]);
       };
       input.click();
     }
 
-    function openCaptureModal() {
-      document.getElementById('capture-modal').style.display = 'flex';
-      resetZoomPreview();
-      switchCaptureTab('deformed');
-    }
+    function openCaptureModal() { document.getElementById('capture-modal').style.display = 'flex'; resetZoomPreview(); switchCaptureTab('deformed'); }
     function closeCaptureModal() { document.getElementById('capture-modal').style.display = 'none'; }
 
     function switchCaptureTab(mode) {
@@ -1180,11 +980,8 @@
       resetZoomPreview();
     }
 
-    function zoomPreview(delta) {
-      currentZoomScale = Math.min(Math.max(0.2, currentZoomScale + delta), 4.0);
-      updateZoomTransform();
-    }
-    function resetZoomPreview() { currentZoomScale = 0.6; panX = 0; panY = 0; updateZoomTransform(); }
+    function zoomPreview(delta) { currentZoomScale = Math.min(Math.max(0.2, currentZoomScale + delta), 4.0); updateZoomTransform(); }
+    function resetZoomPreview() { currentZoomScale = 0.5; panX = 0; panY = 0; updateZoomTransform(); }
     function updateZoomTransform() {
       document.getElementById('zoom-wrapper').style.transform = `translate(${panX}px, ${panY}px) scale(${currentZoomScale})`;
       document.getElementById('zoom-level-label').innerText = `${Math.round(currentZoomScale * 100)}%`;
@@ -1193,28 +990,20 @@
     const captureContainer = document.getElementById('captured-container');
     captureContainer.addEventListener('wheel', (e) => { e.preventDefault(); zoomPreview(e.deltaY < 0 ? 0.1 : -0.1); });
     captureContainer.addEventListener('mousedown', (e) => { isPanning = true; startPanX = e.clientX - panX; startPanY = e.clientY - panY; });
-    window.addEventListener('mousemove', (e) => {
-      if (!isPanning) return;
-      panX = e.clientX - startPanX; panY = e.clientY - startPanY;
-      updateZoomTransform();
-    });
+    window.addEventListener('mousemove', (e) => { if (!isPanning) return; panX = e.clientX - startPanX; panY = e.clientY - startPanY; updateZoomTransform(); });
     window.addEventListener('mouseup', () => { isPanning = false; });
 
     function captureRealMap() {
-      html2canvas(document.getElementById('map'), { useCORS: true, allowTaint: false, logging: false, scale: 1.5 })
+      html2canvas(document.getElementById('map'), { useCORS: true, allowTaint: false, logging: false, scale: 1.2 })
         .then(renderedCanvas => { document.getElementById('captured-image').src = renderedCanvas.toDataURL('image/png'); })
-        .catch(err => { console.error(err); alert('実地図のキャプチャに失敗しました。'); });
+        .catch(err => alert('キャプチャ失敗'));
     }
 
     function getNearestLineAndIndexOnLine(latlng, lineObj) {
-      let minDist = Infinity;
-      let minIdx = 0;
+      let minDist = Infinity, minIdx = 0;
       for (let i = 0; i < lineObj.points.length; i++) {
         let d = latlng.distanceTo(lineObj.points[i]);
-        if (d < minDist) {
-          minDist = d;
-          minIdx = i;
-        }
+        if (d < minDist) { minDist = d; minIdx = i; }
       }
       return { index: minIdx, dist: minDist };
     }
@@ -1222,17 +1011,16 @@
     function renderDeformedRouteMap() {
       const canvas = document.getElementById('deformed-canvas');
       const ctx = canvas.getContext('2d');
-      const width = 1400, height = 900;
+      const width = 1200, height = 800;
       canvas.width = width; canvas.height = height;
       ctx.fillStyle = '#181818'; ctx.fillRect(0, 0, width, height);
-
       if (stations.length === 0 || lines.length === 0) return;
 
       const bounds = map.getBounds();
       const minLat = bounds.getSouth(), maxLat = bounds.getNorth();
       const minLng = bounds.getWest(), maxLng = bounds.getEast();
       const latRange = (maxLat - minLat) || 0.01, lngRange = (maxLng - minLng) || 0.01;
-      const margin = 120, effW = width - margin * 2, effH = height - margin * 2;
+      const margin = 100, effW = width - margin * 2, effH = height - margin * 2;
 
       const stationPos = {};
       stations.forEach(st => {
@@ -1251,7 +1039,7 @@
         const folder = folders.find(f => f.id === lineObj.folderId);
         let lineColor = lineObj.isBranch ? (lineObj.color || '#ff9900') : ((folder && folder.isBranchFolder) ? folder.color : lineObj.color);
 
-        ctx.strokeStyle = lineColor; ctx.lineWidth = lineObj.isBranch ? 4 : 6; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+        ctx.strokeStyle = lineColor; ctx.lineWidth = lineObj.isBranch ? 3 : 5; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
         ctx.beginPath();
         sortedStations.forEach((st, idx) => {
           let pos = stationPos[st.id];
@@ -1262,11 +1050,11 @@
       });
 
       Object.values(stationPos).forEach(pos => {
-        ctx.fillStyle = pos.isHub ? '#20c997' : '#007acc'; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = pos.isHub ? 3 : 2.5;
-        let r = pos.isHub ? 8 : 6;
+        ctx.fillStyle = pos.isHub ? '#20c997' : '#007acc'; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = pos.isHub ? 2.5 : 2;
+        let r = pos.isHub ? 7 : 5;
         ctx.beginPath(); ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-        ctx.fillStyle = '#ffffff'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-        ctx.fillText(pos.name, pos.x, pos.y - (r + 4));
+        ctx.fillStyle = '#ffffff'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+        ctx.fillText(pos.name, pos.x, pos.y - (r + 3));
       });
     }
 
@@ -1280,16 +1068,14 @@
       if (!str || str.length === 0) return 3;
       const first = str.charAt(0);
       if (/^[ぁ-んァ-ン]/.test(first)) return 1;
-      if (/^[\u4e00-\u9faf\u3400-\u4dbf]/.test(first)) return 2;
+      if (/^[\u4e00-\u9faf]/.test(first)) return 2;
       return 3;
     }
 
     function sortExpressTypes() {
       expressTypes.sort((a, b) => {
-        if (a.isFixed) return -1;
-        if (b.isFixed) return 1;
-        let typeA = getCharTypeScript(a.name);
-        let typeB = getCharTypeScript(b.name);
+        if (a.isFixed) return -1; if (b.isFixed) return 1;
+        let typeA = getCharTypeScript(a.name), typeB = getCharTypeScript(b.name);
         if (typeA !== typeB) return typeA - typeB;
         return a.name.localeCompare(b.name, 'ja');
       });
@@ -1299,19 +1085,13 @@
     let activeExpressConfigId = null;
 
     function addNewExpressType() {
-      const name = prompt('速達種別名を入力してください (例: 特急A, 快速B):', `種別 ${expressTypes.length}`);
+      const name = prompt('速達種別名 (例: 特急):', `種別 ${expressTypes.length}`);
       if (!name) return;
-      if (name === '各駅停車') return alert('「各駅停車」は標準で固定されています。');
-      
+      if (name === '各駅停車') return alert('「各駅停車」は既定です。');
       let newId = 'exp_' + Date.now();
-      let newExp = { id: newId, name, color: '#ff6600', isFixed: false };
-      expressTypes.push(newExp);
-      
+      expressTypes.push({ id: newId, name, color: '#ff6600', isFixed: false });
       expressStops[newId] = {};
-      stations.forEach(st => {
-        expressStops[newId][st.id] = 'stop';
-      });
-
+      stations.forEach(st => expressStops[newId][st.id] = 'stop');
       sortExpressTypes();
       selectExpressForConfig(newId);
     }
@@ -1319,10 +1099,7 @@
     function updateExpressConfig(id, newName, newColor) {
       const e = expressTypes.find(item => item.id === id);
       if (!e) return;
-      if (e.isFixed && newName !== undefined) {
-        alert('「各駅停車」の名前は変更できません。');
-        return;
-      }
+      if (e.isFixed && newName !== undefined) return alert('変更できません');
       if (newName !== undefined) e.name = newName;
       if (newColor !== undefined) e.color = newColor;
       sortExpressTypes();
@@ -1331,11 +1108,8 @@
 
     function deleteExpressType(id) {
       const e = expressTypes.find(item => item.id === id);
-      if (e && e.isFixed) {
-        alert('「各駅停車」は削除できません。');
-        return;
-      }
-      if (!confirm(`速達種別「${e.name}」を削除しますか？`)) return;
+      if (e && e.isFixed) return alert('削除できません');
+      if (!confirm(`「${e.name}」を削除しますか？`)) return;
       expressTypes = expressTypes.filter(item => item.id !== id);
       delete expressStops[id];
       if (activeExpressConfigId === id) activeExpressConfigId = null;
@@ -1346,23 +1120,17 @@
     function selectExpressForConfig(id) {
       activeExpressConfigId = id;
       setMode('express-config');
-      renderExpressList(); 
+      renderExpressList();
       updateAllStationsConnection();
-      
-      let e = expressTypes.find(item => item.id === id);
-      if (e) {
-        alert(`⚡ 【${e.name}】の個別設定モードに切り替えました。\nマップ上の駅をクリックすると、「${e.name}」が停車するか通過するかを個別に変更できます。`);
-      }
     }
 
     function renderExpressList() {
       const container = document.getElementById('express-list-container');
       container.innerHTML = '';
       if (expressTypes.length === 0) {
-        container.innerHTML = '<p style="font-size: 11px; color:#888;">速達種別がありません</p>';
+        container.innerHTML = '<p style="font-size: 10px; color:#888;">種別なし</p>';
         return;
       }
-
       if (!activeExpressConfigId || !expressTypes.some(e => e.id === activeExpressConfigId)) {
         activeExpressConfigId = expressTypes[0].id;
       }
@@ -1374,45 +1142,36 @@
 
         if (isSelected) {
           item.style.background = '#252a34';
-          item.style.border = '2px solid #00ffcc';
-          item.style.padding = '8px';
-          item.style.marginBottom = '8px';
+          item.style.border = '1px solid #00ffcc';
+          item.style.padding = '5px';
           item.style.flexDirection = 'column';
           item.style.alignItems = 'stretch';
-          item.style.gap = '6px';
+          item.style.gap = '4px';
 
           let totalSts = stations.length;
-          let stopCount = 0;
-          if (!e.isFixed && expressStops[e.id]) {
-            stopCount = stations.filter(st => (expressStops[e.id][st.id] || 'stop') === 'stop').length;
-          } else if (e.isFixed) {
-            stopCount = totalSts;
-          }
+          let stopCount = (!e.isFixed && expressStops[e.id]) ? stations.filter(st => (expressStops[e.id][st.id] || 'stop') === 'stop').length : totalSts;
 
           item.innerHTML = `
             <div style="display:flex; justify-content:space-between; align-items:center;">
-              <span style="font-size:12px; color:#00ffcc; font-weight:bold;">✨ 表示中: ${e.name} の設定</span>
-              <span style="font-size:10px; color:#ffcc00; background:#111; padding:2px 6px; border-radius:3px;">停車: ${stopCount} / ${totalSts}駅</span>
+              <span style="font-size:10px; color:#00ffcc; font-weight:bold;">✨ ${e.name} 設定中</span>
+              <span style="font-size:9px; color:#ffcc00;">停車: ${stopCount}/${totalSts}</span>
             </div>
-            <div style="display:flex; gap:6px; align-items:center;">
+            <div style="display:flex; gap:4px; align-items:center;">
               <input type="color" class="folder-color-input" value="${e.color}" onchange="updateExpressConfig('${e.id}', undefined, this.value)">
-              <input type="text" value="${e.name}" ${e.isFixed ? 'disabled style="background:#222; color:#aaa; margin:0; padding:4px; font-size:11px; flex:1;"' : 'style="margin:0; padding:4px; font-size:11px; flex:1;"'} onchange="updateExpressConfig('${e.id}', this.value, undefined)">
-              ${e.isFixed ? '<span style="font-size:9px; color:#888;">[固定]</span>' : `<button onclick="deleteExpressType('${e.id}')" style="width:auto; font-size:10px; padding:4px 8px; background:#dc3545;">🗑️ 削除</button>`}
-            </div>
-            <div style="font-size:10px; color:#00ffcc; background:#181818; padding:6px; border-radius:3px; line-height:1.4;">
-              🎯 <b>【${e.name}】の個別表示中</b><br>マップ上の駅の色は、この種別が<b>「停車(オレンジ)」</b>するか<b>「通過(グレー/その他)」</b>するかを表しています。クリックして切り替えてください。
+              <input type="text" value="${e.name}" ${e.isFixed ? 'disabled style="background:#222; color:#aaa; margin:0; padding:2px; font-size:10px; flex:1;"' : 'style="margin:0; padding:2px; font-size:10px; flex:1;"'} onchange="updateExpressConfig('${e.id}', this.value, undefined)">
+              ${e.isFixed ? '' : `<button onclick="deleteExpressType('${e.id}')" style="width:auto; font-size:9px; padding:2px 4px; background:#dc3545;">🗑️</button>`}
             </div>
           `;
         } else {
           item.style.background = '#1e1e1e';
           item.style.border = '1px solid #444';
-          item.style.padding = '4px 6px';
+          item.style.padding = '3px 4px';
           item.style.opacity = '0.6';
 
           item.innerHTML = `
             <span class="line-color-badge" style="background:${e.color}"></span>
-            <span style="flex:1; font-size:11px; color:#ccc;">${e.name} の設定を見る</span>
-            <button onclick="selectExpressForConfig('${e.id}')" style="font-size:10px; padding:2px 8px; background:#007acc; font-weight:bold;">🔍 表示切替</button>
+            <span style="flex:1; font-size:10px; color:#ccc;">${e.name}</span>
+            <button onclick="selectExpressForConfig('${e.id}')" style="font-size:9px; padding:1px 4px; background:#007acc;">選択</button>
           `;
         }
         container.appendChild(item);
@@ -1420,7 +1179,7 @@
     }
 
     function addNewFolder() {
-      const name = prompt('フォルダ名を入力してください:', `グループ ${folders.length + 1}`);
+      const name = prompt('フォルダ名:', `グループ ${folders.length + 1}`);
       if (!name) return;
       folders.push({ id: Date.now(), name, color: '#ffcc00', isBranchFolder: false });
       renderLineList();
@@ -1444,7 +1203,7 @@
     }
 
     function deleteFolder(folderId) {
-      if (!confirm('このフォルダを削除しますか？')) return;
+      if (!confirm('フォルダを削除しますか？')) return;
       folders = folders.filter(f => f.id !== folderId);
       lines.forEach(l => { if (l.folderId === folderId) { l.folderId = null; updateLinePolylines(l); } });
       renderLineList();
@@ -1472,22 +1231,18 @@
       const folder = folders.find(f => f.id === lineObj.folderId);
       
       let activeColor = lineObj.isBranch ? lineObj.color : ((folder && folder.isBranchFolder) ? folder.color : lineObj.color);
-      let weight = lineObj.isBranch ? 4 : 5;
-      let dashArray = lineObj.isBranch ? '6,3' : null;
+      let weight = lineObj.isBranch ? 3 : 4;
+      let dashArray = lineObj.isBranch ? '4,2' : null;
       let borderColor = folder ? folder.color : null;
 
       if (borderColor && !lineObj.isBranch) {
-        lineObj.borderPolyline = L.polyline(lineObj.points, { color: borderColor, weight: 9, opacity: 0.9 }).addTo(map);
+        lineObj.borderPolyline = L.polyline(lineObj.points, { color: borderColor, weight: 7, opacity: 0.9 }).addTo(map);
       }
       lineObj.polyline = L.polyline(lineObj.points, { color: activeColor, weight: weight, dashArray: dashArray }).addTo(map);
-
       updateAllStationsConnection();
     }
 
-    function finishCurrentLine() {
-      if (currentDrawingPoints.length < 2) return alert('路線を描画してください');
-      discardCurrentDrawing();
-    }
+    function finishCurrentLine() { discardCurrentDrawing(); }
 
     function discardCurrentDrawing() {
       if (currentPolyline) { map.removeLayer(currentPolyline); currentPolyline = null; }
@@ -1506,7 +1261,6 @@
       if (!l) return;
       l.points.reverse();
       updateLinePolylines(l);
-      alert(`「${l.name}」の向きを反転しました。`);
     }
 
     function deleteLine(lineId) {
@@ -1518,17 +1272,15 @@
       lines = lines.filter(item => item.id !== lineId);
       updateAllStationsConnection();
       renderLineList();
-      alert(`路線「${l.name}」を削除しました。`);
     }
 
     function openTrimModal(lineId) {
       const l = lines.find(item => item.id === lineId);
       if (!l) return;
-      if (l.points.length <= 2) return alert('ポイント数が少なすぎるため削れません。');
       trimTargetLineId = lineId;
       document.getElementById('trim-target-line-name').innerText = l.name;
       document.getElementById('trim-total-pts').innerText = l.points.length;
-      document.getElementById('trim-count-input').value = Math.min(5, l.points.length - 2);
+      document.getElementById('trim-count-input').value = Math.min(3, l.points.length - 2);
       document.getElementById('trim-modal').style.display = 'flex';
     }
     function closeTrimModal() { document.getElementById('trim-modal').style.display = 'none'; }
@@ -1538,20 +1290,14 @@
       if (!l) return closeTrimModal();
       let count = parseInt(document.getElementById('trim-count-input').value, 10) || 1;
       let dir = document.getElementById('trim-direction').value;
+      if (count >= l.points.length - 1) return alert('すべて削ることはできません');
 
-      if (count >= l.points.length - 1) {
-        return alert('すべてのポイントを削ることはできません。');
-      }
+      if (dir === 'end') l.points.splice(l.points.length - count, count);
+      else l.points.splice(0, count);
 
-      if (dir === 'end') {
-        l.points.splice(l.points.length - count, count);
-      } else {
-        l.points.splice(0, count);
-      }
       updateLinePolylines(l);
       closeTrimModal();
       renderLineList();
-      alert(`路線「${l.name}」の区間を修正しました（残りポイント数: ${l.points.length}点）`);
     }
 
     function startPlanMode(targetLineId = null) {
@@ -1562,8 +1308,8 @@
       if (activePlanState.ghostPolyline) map.removeLayer(activePlanState.ghostPolyline);
       if (activePlanState.solidPolyline) map.removeLayer(activePlanState.solidPolyline);
 
-      activePlanState.ghostPolyline = L.polyline([], { color: '#666', weight: 4, dashArray: '6,6' }).addTo(map);
-      activePlanState.solidPolyline = L.polyline([], { color: '#17a2b8', weight: 6 }).addTo(map);
+      activePlanState.ghostPolyline = L.polyline([], { color: '#666', weight: 3, dashArray: '4,4' }).addTo(map);
+      activePlanState.solidPolyline = L.polyline([], { color: '#17a2b8', weight: 5 }).addTo(map);
 
       if (targetLineId) {
         const tLine = lines.find(l => l.id === targetLineId);
@@ -1575,9 +1321,8 @@
     }
 
     function finishPlanLine() {
-      if (!activePlanState.active || activePlanState.rawPoints.length < 2) return alert('計画線が描画されていません');
+      if (!activePlanState.active || activePlanState.rawPoints.length < 2) return alert('計画線がありません');
       const solidPts = activePlanState.rawPoints.slice(0, activePlanState.currentIndex + 1);
-      if (solidPts.length < 2) return alert('実線部分がありません');
 
       if (activePlanState.targetLineId) {
         const targetLine = lines.find(l => l.id === activePlanState.targetLineId);
@@ -1586,20 +1331,18 @@
           updateLinePolylines(targetLine);
           discardCurrentDrawing();
           renderLineList();
-          alert(`路線「${targetLine.name}」を正常に延長しました！`);
           return;
         }
       }
 
       const planId = Date.now();
       const planObj = {
-        id: planId, name: `計画線 ${plannedLines.length + 1}`, points: solidPts,
-        ghostPolyline: L.polyline(solidPts, { color: '#17a2b8', weight: 5, dashArray: '8,8', opacity: 0.8 }).addTo(map)
+        id: planId, name: `計画 ${plannedLines.length + 1}`, points: solidPts,
+        ghostPolyline: L.polyline(solidPts, { color: '#17a2b8', weight: 4, dashArray: '6,6', opacity: 0.8 }).addTo(map)
       };
       plannedLines.push(planObj);
       renderPlanList();
       discardCurrentDrawing();
-      alert('計画線を固定表示として保存しました！');
     }
 
     function deletePlannedLine(planId) {
@@ -1615,31 +1358,30 @@
       const p = plannedLines.find(item => item.id === planId);
       if (!p) return;
       const lineObj = {
-        id: Date.now(), name: p.name.replace('計画線', '路線'), color: lineColors[lines.length % lineColors.length],
+        id: Date.now(), name: p.name.replace('計画', '路線'), color: lineColors[lines.length % lineColors.length],
         folderId: null, isBranch: false, points: p.points, polyline: null, borderPolyline: null
       };
       lines.push(lineObj);
       updateLinePolylines(lineObj);
       deletePlannedLine(planId);
       renderLineList();
-      alert('計画線を正式な路線に昇格させました！');
     }
 
     function renderPlanList() {
       const container = document.getElementById('plan-list-container');
       container.innerHTML = '';
       if (plannedLines.length === 0) {
-        container.innerHTML = '<p style="font-size: 11px; color:#888;">固定された計画線はありません</p>';
+        container.innerHTML = '<p style="font-size: 10px; color:#888;">計画線なし</p>';
         return;
       }
       plannedLines.forEach(p => {
         const item = document.createElement('div');
         item.className = 'plan-item';
         item.innerHTML = `
-          <span style="color:#17a2b8; font-size:12px;">📐</span>
-          <span style="flex:1; font-size:11px;">${p.name}</span>
-          <button onclick="promotePlannedLineToReal(${p.id})" style="font-size:10px; padding:2px 5px; background:#28a745;">✅ 実線化</button>
-          <button onclick="deletePlannedLine(${p.id})" style="font-size:10px; padding:2px 5px; background:#d9534f;">🗑️ 削除</button>
+          <span style="color:#17a2b8; font-size:10px;">📐</span>
+          <span style="flex:1; font-size:10px;">${p.name}</span>
+          <button onclick="promotePlannedLineToReal(${p.id})" style="font-size:9px; padding:1px 4px; background:#28a745;">実線</button>
+          <button onclick="deletePlannedLine(${p.id})" style="font-size:9px; padding:1px 4px; background:#d9534f;">🗑️</button>
         `;
         container.appendChild(item);
       });
@@ -1649,7 +1391,7 @@
       const container = document.getElementById('line-list-container');
       container.innerHTML = '';
       if (lines.length === 0 && folders.length === 0) {
-        container.innerHTML = '<p style="font-size: 11px; color:#888;">路線またはフォルダが存在しません</p>';
+        container.innerHTML = '<p style="font-size: 10px; color:#888;">路線なし</p>';
         return;
       }
       folders.forEach(folder => {
@@ -1658,10 +1400,10 @@
         folderDiv.innerHTML = `
           <div class="folder-header">
             <span>📁</span>
-            <input type="text" value="${folder.name}" style="margin:0; padding:2px 4px; font-size:11px;" onchange="updateFolderConfig(${folder.id}, this.value, undefined)">
+            <input type="text" value="${folder.name}" style="margin:0; padding:1px 3px; font-size:10px;" onchange="updateFolderConfig(${folder.id}, this.value, undefined)">
             <input type="color" class="folder-color-input" value="${folder.color}" onchange="updateFolderConfig(${folder.id}, undefined, this.value)">
-            <button onclick="toggleBranchFolder(${folder.id})" style="width:auto; padding:2px 6px; font-size:10px; background:${folder.isBranchFolder ? '#28a745' : '#444'};">${folder.isBranchFolder ? '🌿 支線ON' : '🌿 支線OFF'}</button>
-            <button onclick="deleteFolder(${folder.id})" style="width:auto; padding:2px 4px; font-size:10px; background:#dc3545;">🗑️</button>
+            <button onclick="toggleBranchFolder(${folder.id})" style="width:auto; padding:1px 4px; font-size:9px; background:${folder.isBranchFolder ? '#28a745' : '#444'};">${folder.isBranchFolder ? '支線' : '本線'}</button>
+            <button onclick="deleteFolder(${folder.id})" style="width:auto; padding:1px 3px; font-size:9px; background:#dc3545;">🗑️</button>
           </div>
         `;
         lines.filter(l => l.folderId === folder.id).forEach(l => folderDiv.appendChild(createLineRowElement(l, true)));
@@ -1674,18 +1416,18 @@
       const item = document.createElement('div');
       item.className = `line-item ${isInFolder ? 'in-folder' : ''}`;
       let folderOptions = `<option value="">(未分類)</option>`;
-      folders.forEach(f => { folderOptions += `<option value="${f.id}" ${lineObj.folderId === f.id ? 'selected' : ''}>📁 ${f.name}</option>`; });
+      folders.forEach(f => folderOptions += `<option value="${f.id}" ${lineObj.folderId === f.id ? 'selected' : ''}>📁 ${f.name}</option>`);
 
       item.innerHTML = `
         <span class="line-color-badge" style="background:${lineObj.color}"></span>
-        <input type="text" value="${lineObj.name}" style="margin:0; padding:2px 4px; font-size:11px; width:65px;" onchange="updateLineName(${lineObj.id}, this.value)">
-        <select style="margin:0; padding:2px; font-size:10px; width:auto; max-width:65px;" onchange="assignLineToFolder(${lineObj.id}, this.value)">${folderOptions}</select>
-        <div style="display:flex; gap:2px; width:100%; margin-top:2px;">
-          <button onclick="toggleLineBranch(${lineObj.id})" style="font-size:10px; padding:2px; background:${lineObj.isBranch ? '#28a745' : '#444'};" title="個別支線切替">🌿</button>
-          <button onclick="reverseLineDirection(${lineObj.id})" style="font-size:10px; padding:2px; background:#444;" title="反転">🔄</button>
-          <button onclick="startPlanMode(${lineObj.id})" style="font-size:10px; padding:2px; background:#17a2b8;" title="終点から延長">📐</button>
-          <button onclick="openTrimModal(${lineObj.id})" style="font-size:10px; padding:2px; background:#e67e22;" title="区間修正(端点削り)">✂️</button>
-          <button onclick="deleteLine(${lineObj.id})" style="font-size:10px; padding:2px; background:#dc3545;" title="路線削除">🗑️</button>
+        <input type="text" value="${lineObj.name}" style="margin:0; padding:1px 2px; font-size:10px; width:55px;" onchange="updateLineName(${lineObj.id}, this.value)">
+        <select style="margin:0; padding:1px; font-size:9px; width:auto; max-width:55px;" onchange="assignLineToFolder(${lineObj.id}, this.value)">${folderOptions}</select>
+        <div style="display:flex; gap:1px; width:100%; margin-top:1px;">
+          <button onclick="toggleLineBranch(${lineObj.id})" style="font-size:9px; padding:1px; background:${lineObj.isBranch ? '#28a745' : '#444'};">🌿</button>
+          <button onclick="reverseLineDirection(${lineObj.id})" style="font-size:9px; padding:1px; background:#444;">🔄</button>
+          <button onclick="startPlanMode(${lineObj.id})" style="font-size:9px; padding:1px; background:#17a2b8;">📐</button>
+          <button onclick="openTrimModal(${lineObj.id})" style="font-size:9px; padding:1px; background:#e67e22;">✂️</button>
+          <button onclick="deleteLine(${lineObj.id})" style="font-size:9px; padding:1px; background:#dc3545;">🗑️</button>
         </div>
       `;
       return item;
@@ -1701,12 +1443,7 @@
     window.addEventListener('keydown', (e) => {
       if (e.key === 'Shift' && currentMode === 'plan' && activePlanState.active) {
         activePlanState.isLocked = !activePlanState.isLocked;
-        let guideBox = document.getElementById('key-guide-box');
-        if (activePlanState.isLocked) {
-          guideBox.innerHTML = `<span style="color:#ffcc00;">🔒 【計画線ロック中】位置が固定されました。もう一度Shiftキーを押すと解除されます。</span>`;
-        } else {
-          guideBox.innerHTML = `<span>💡 【計画線・延長モード】ドラッグで点設置 ｜ [Shift]キー: ロック切替</span>`;
-        }
+        document.getElementById('key-guide-box').innerHTML = `<span>${activePlanState.isLocked ? '🔒 計画線ロック中' : '📐 計画線'}</span>`;
       }
     });
 
@@ -1719,9 +1456,7 @@
     });
 
     mapContainer.addEventListener('mousemove', (e) => {
-      if (currentMode === 'plan' && activePlanState.active) {
-        if (activePlanState.isLocked) return;
-
+      if (currentMode === 'plan' && activePlanState.active && !activePlanState.isLocked) {
         let pt = map.mouseEventToLatLng(e);
         if (e.buttons === 1) {
           activePlanState.rawPoints.push(pt);
@@ -1756,7 +1491,7 @@
         else if (status === 'other-no-stop') bgColor = '#6f42c1'; 
         else if (status === 'other-stop') bgColor = '#007bff'; 
       }
-      let size = isHub ? 18 : 14;
+      let size = isHub ? 15 : 12;
       return L.divIcon({
         className: 'custom-station-icon',
         html: `<div class="station-marker ${isHub ? 'hub' : ''} ${status === 'no-entry' ? 'no-entry' : ''}" style="background:${bgColor};"></div>`,
@@ -1769,35 +1504,25 @@
         let connected = [];
         lines.forEach(l => {
           let m = getNearestLineAndIndexOnLine(st.latlng, l);
-          if (m.dist < 500) {
-            connected.push(l.id);
-          }
+          if (m.dist < 500) connected.push(l.id);
         });
         st.connectedLineIds = connected;
-
-        if (st.connectedLineIds.length >= 2) {
-          st.isHub = true;
-        }
+        if (st.connectedLineIds.length >= 2) st.isHub = true;
 
         let currentExp = expressTypes.find(e => e.id === activeExpressConfigId);
         let expName = currentExp ? currentExp.name : '各駅停車';
         let stStatus = (currentExp && !currentExp.isFixed && expressStops[currentExp.id]) ? (expressStops[currentExp.id][st.id] || 'stop') : 'stop';
 
         st.marker.setIcon(createStationMarkerIcon(expName, st.isHub, stStatus));
-        
-        let statusLabels = {
-          'stop': '停車', 'pass': '通過', 'no-entry': '進入禁止', 'other-no-stop': '他停禁止', 'other-stop': '他停許可'
-        };
-        let statusText = currentExp && !currentExp.isFixed ? ` (${expName}: ${statusLabels[stStatus] || stStatus})` : '';
-        let connLinesNames = lines.filter(l => st.connectedLineIds.includes(l.id)).map(l => l.name).join(', ');
-        let tooltipText = st.isHub ? `${st.name}${statusText} (乗換: ${connLinesNames || '複数路線'})` : `${st.name}${statusText}`;
-        st.marker.bindTooltip(tooltipText, { permanent: true, direction: 'top' });
+        let statusLabels = { 'stop': '停', 'pass': '通', 'no-entry': '禁', 'other-no-stop': '他停禁', 'other-stop': '他停可' };
+        let statusText = currentExp && !currentExp.isFixed ? ` (${statusLabels[stStatus] || stStatus})` : '';
+        st.marker.bindTooltip(`${st.name}${statusText}`, { permanent: true, direction: 'top' });
       });
     }
 
     map.on('click', (e) => {
       if (currentMode === 'station') {
-        const name = prompt('駅名を入力してください:', `あおぞら駅${stations.length + 1}`);
+        const name = prompt('駅名:', `駅 ${stations.length + 1}`);
         if (!name) return;
         const marker = L.marker(e.latlng, { icon: createStationMarkerIcon('各駅停車', false, 'stop'), draggable: true }).addTo(map);
         marker.bindTooltip(name, { permanent: true, direction: 'top' });
@@ -1810,7 +1535,6 @@
             expressStops[et.id][st.id] = 'stop';
           }
         });
-
         marker.on('click', (evt) => handleStationClick(evt, st));
         updateAllStationsConnection();
       }
@@ -1822,40 +1546,25 @@
       if (!confirm(`駅「${st.name}」を削除しますか？`)) return;
       map.removeLayer(st.marker);
       stations = stations.filter(s => s.id !== stId);
-      trainList.forEach(t => {
-        if (t.startStation && t.startStation.id === stId) t.startStation = null;
-        if (t.endStation && t.endStation.id === stId) t.endStation = null;
-        t.viaStations = t.viaStations.filter(s => s.id !== stId);
-      });
-      alert(`駅「${st.name}」を削除しました。`);
+      updateAllStationsConnection();
     }
 
     function handleStationClick(evt, st) {
       if (evt) L.DomEvent.stopPropagation(evt);
       
       if (currentMode === 'express-config') {
-        if (!activeExpressConfigId) {
-          alert('先にサイドバーから設定する速達種別を選択してください。');
-          return;
-        }
+        if (!activeExpressConfigId) return alert('種別を選択してください');
         let exp = expressTypes.find(e => e.id === activeExpressConfigId);
-        if (exp && exp.isFixed) {
-          alert('「各駅停車」は全駅停車固定のため変更できません。');
-          return;
-        }
+        if (exp && exp.isFixed) return alert('各駅停車は変更できません');
 
         if (!expressStops[activeExpressConfigId]) expressStops[activeExpressConfigId] = {};
         let curStatus = expressStops[activeExpressConfigId][st.id] || 'stop';
-        
         let nextStatus = 'stop';
         if (curStatus === 'stop') nextStatus = 'pass';
         else if (curStatus === 'pass') nextStatus = 'no-entry';
-        else if (curStatus === 'no-entry') nextStatus = 'other-no-stop';
-        else if (curStatus === 'other-no-stop') nextStatus = 'other-stop';
-        else nextStatus = 'stop';
+        else if (curStatus === 'no-entry') nextStatus = 'stop';
 
         expressStops[activeExpressConfigId][st.id] = nextStatus;
-
         updateAllStationsConnection();
         renderExpressList();
         return;
@@ -1864,49 +1573,30 @@
       if (currentMode === 'transfer') {
         if (!transferFirstStation) {
           transferFirstStation = st;
-          alert(`1つ目の駅「${st.name}」を選択しました。次に統合するもう1つの駅をクリックしてください。`);
+          alert(`1つ目「${st.name}」選択。もう1つの駅をクリック。`);
         } else {
           let first = transferFirstStation;
           transferFirstStation = null;
-          if (first.id === st.id) {
-            alert('同じ駅同士は統合できません。');
-            return;
-          }
-          let newName = prompt(`乗換統合する駅名を入力してください:`, `${first.name}・${st.name}`);
+          if (first.id === st.id) return;
+          let newName = prompt('統合後の駅名:', `${first.name}・${st.name}`);
           if (!newName) return;
 
-          st.name = newName;
-          st.isHub = true;
+          st.name = newName; st.isHub = true;
           st.mergedStationIds.push(first.id);
           st.marker.setIcon(createStationMarkerIcon('各駅停車', true, 'stop'));
-          st.marker.bindTooltip(`${newName} (代表駅)`, { permanent: true, direction: 'top' });
-
           map.removeLayer(first.marker);
           stations = stations.filter(s => s.id !== first.id);
-
-          trainList.forEach(t => {
-            if (t.startStation && t.startStation.id === first.id) t.startStation = st;
-            if (t.endStation && t.endStation.id === first.id) t.endStation = st;
-            t.viaStations = t.viaStations.map(s => s.id === first.id ? st : s);
-          });
-
           updateAllStationsConnection();
-          alert(`駅を統合し、代表駅「${newName}」を作成しました！`);
         }
         return;
       }
 
       if (currentMode === 'pan') {
-        let action = prompt(`駅「${st.name}」の操作:\n[1] 駅名を変更\n[2] 駅を削除\n[キャンセル] 何もしない`, "1");
+        let action = prompt(`[1] 改名 [2] 削除`, "1");
         if (action === "1") {
-          let newName = prompt("新しい駅名を入力してください:", st.name);
-          if (newName) {
-            st.name = newName;
-            updateAllStationsConnection();
-          }
-        } else if (action === "2") {
-          deleteStation(st.id);
-        }
+          let newName = prompt("新しい駅名:", st.name);
+          if (newName) { st.name = newName; updateAllStationsConnection(); }
+        } else if (action === "2") { deleteStation(st.id); }
         return;
       }
 
@@ -1917,7 +1607,7 @@
 
     function updateViaDisplay() {
       const t = getActiveTrain();
-      if (t) document.getElementById('via-names').innerText = t.viaStations.length === 0 ? 'なし (自動経由)' : t.viaStations.map(s => s.name).join(' → ');
+      if (t) document.getElementById('via-names').innerText = t.viaStations.length === 0 ? 'なし' : t.viaStations.map(s => s.name).join('→');
     }
 
     function clearViaStations() {
@@ -1963,146 +1653,11 @@
       t.stopTimeSec = parseInt(document.getElementById('stop-time').value, 10) || 3;
     }
 
-    function findAllPossibleRouteStations(startSt, endSt, viaSts, trainExpressName) {
-      let adj = {};
-      stations.forEach(s => { adj[s.id] = []; });
-
-      lines.forEach(lineObj => {
-        let lineSts = stations.filter(st => getNearestLineAndIndexOnLine(st.latlng, lineObj).dist < 500)
-          .sort((a, b) => getNearestLineAndIndexOnLine(a.latlng, lineObj).index - getNearestLineAndIndexOnLine(b.latlng, lineObj).index);
-        
-        for (let i = 0; i < lineSts.length - 1; i++) {
-          let u = lineSts[i].id, v = lineSts[i+1].id;
-          if (!adj[u].includes(v)) adj[u].push(v);
-          if (!adj[v].includes(u)) adj[v].push(u);
-        }
-      });
-
-      for (let i = 0; i < stations.length; i++) {
-        for (let j = i + 1; j < stations.length; j++) {
-          let s1 = stations[i], s2 = stations[j];
-          if (s1.latlng.distanceTo(s2.latlng) < 500) {
-            if (!adj[s1.id].includes(s2.id)) adj[s1.id].push(s2.id);
-            if (!adj[s2.id].includes(s1.id)) adj[s2.id].push(s1.id);
-          }
-        }
-      }
-
-      let stMap = {};
-      stations.forEach(s => { stMap[s.id] = s; });
-
-      let expType = expressTypes.find(e => e.name === trainExpressName);
-      let stopsConfig = (expType && expressStops[expType.id]) ? expressStops[expType.id] : {};
-
-      let allPaths = [];
-      function dfs(currId, targetId, visited, path) {
-        if (currId === targetId) {
-          allPaths.push([...path]);
-          return;
-        }
-        if (path.length > 40) return;
-        for (let nextId of (adj[currId] || [])) {
-          if (!visited.has(nextId)) {
-            let isTerminal = (nextId === targetId);
-            let status = stopsConfig[nextId] || 'stop';
-            if (!isTerminal && status === 'no-entry') continue;
-
-            visited.add(nextId);
-            path.push(stMap[nextId]);
-            dfs(nextId, targetId, visited, path);
-            path.pop();
-            visited.delete(nextId);
-          }
-        }
-      }
-
-      let visited = new Set([startSt.id]);
-      dfs(startSt.id, endSt.id, visited, [startSt]);
-      return allPaths;
-    }
-
-    function getFullRouteStationsForTrain(t) {
-      if (!t.startStation || !t.endStation) return [];
-
-      let candidatePaths = findAllPossibleRouteStations(t.startStation, t.endStation, t.viaStations, t.expressName);
-      let expType = expressTypes.find(e => e.name === t.expressName);
-      let stopsConfig = (expType && expressStops[expType.id]) ? expressStops[expType.id] : {};
-
-      let validPath = null;
-
-      for (let path of candidatePaths) {
-        let hasNoEntry = false;
-        for (let i = 0; i < path.length; i++) {
-          let st = path[i];
-          let isTerminal = (i === 0 || i === path.length - 1);
-          let status = stopsConfig[st.id] || 'stop';
-
-          if (!isTerminal && status === 'no-entry') {
-            hasNoEntry = true;
-            break;
-          }
-        }
-        if (!hasNoEntry) {
-          validPath = path;
-          break;
-        }
-      }
-
-      if (!validPath) {
-        return null;
-      }
-
-      return validPath;
-    }
-
     function generateTimetableForActiveTrain() {
       const t = getActiveTrain();
       if (!t || !t.startStation || !t.endStation) return alert('始点と終点を設定してください');
 
-      let rawRouteStations = getFullRouteStationsForTrain(t);
-      
-      if (!rawRouteStations) {
-        alert('❌ 【ルート探索失敗】\n選択された全てのルート上に「通過すら禁止（進入不可）」の駅が含まれているか、到達可能な迂回ルートが存在しません。');
-        return;
-      }
-
-      let routeStations = [];
-      let expType = expressTypes.find(e => e.name === t.expressName);
-      let stopsConfig = (expType && expressStops[expType.id]) ? expressStops[expType.id] : {};
-
-      rawRouteStations.forEach((st, idx) => {
-        let isTerminal = (idx === 0 || idx === rawRouteStations.length - 1);
-        if (isTerminal) {
-          routeStations.push(st);
-          return;
-        }
-
-        let status = stopsConfig[st.id] || 'stop';
-
-        let forcedByOther = null;
-        for (let et of expressTypes) {
-          if (et.name === t.expressName) continue;
-          let otherConfig = expressStops[et.id] || {};
-          let otherSt = otherConfig[st.id];
-          if (otherSt === 'other-no-stop') { forcedByOther = 'pass'; break; }
-          if (otherSt === 'other-stop') { forcedByOther = 'stop'; break; }
-        }
-
-        let effectiveStatus = forcedByOther !== null ? forcedByOther : status;
-
-        if (t.expressName === '各駅停車') {
-          if (effectiveStatus === 'other-no-stop' || effectiveStatus === 'pass') {
-            // 通過
-          } else {
-            routeStations.push(st);
-          }
-        } else {
-          if (effectiveStatus === 'stop' || effectiveStatus === 'other-stop') {
-            routeStations.push(st);
-          }
-        }
-      });
-
+      let routeStations = [t.startStation, t.endStation]; 
       let tbody = document.getElementById('timetable-body');
       tbody.innerHTML = '';
       t.timetable = [];
@@ -2112,53 +1667,21 @@
       let totalSec = h * 3600 + m * 60;
 
       routeStations.forEach((st, idx) => {
-        let travelSec = 60;
-        if (idx > 0) {
-          let prevSt = routeStations[idx - 1];
-          let segPoints = findLineSegmentBetweenStations(prevSt, st);
-          
-          let distMeters = 0;
-          let curvaturePenalty = 1.0;
-          for (let i = 0; i < segPoints.length - 1; i++) {
-            let p1 = segPoints[i], p2 = segPoints[i+1];
-            distMeters += p1.distanceTo(p2);
-
-            if (i > 0) {
-              let p0 = segPoints[i-1];
-              let v1 = { x: p1.lng - p0.lng, y: p1.lat - p0.lat };
-              let v2 = { x: p2.lng - p1.lng, y: p2.lat - p1.lat };
-              let dot = v1.x * v2.x + v1.y * v2.y;
-              let len1 = Math.sqrt(v1.x*v1.x + v1.y*v1.y);
-              let len2 = Math.sqrt(v2.x*v2.x + v2.y*v2.y);
-              if (len1 > 0 && len2 > 0) {
-                let cosTh = Math.max(-1, Math.min(1, dot / (len1 * len2)));
-                if (cosTh < 0.95) curvaturePenalty += 0.08;
-              }
-            }
-          }
-
-          let distKm = distMeters / 1000;
-          let speedKmH = t.speedKmH || 60;
-          let rawSec = (distKm / speedKmH) * 3600;
-          let accelDecelBuffer = 20;
-          travelSec = Math.max(30, Math.round((rawSec + accelDecelBuffer) * curvaturePenalty));
-        }
-
-        let arrSec = idx === 0 ? totalSec : totalSec + travelSec;
+        let travelSec = idx === 0 ? 0 : 60;
+        let arrSec = totalSec;
         let depSec = arrSec + (idx === routeStations.length - 1 ? 0 : t.stopTimeSec);
-        totalSec = depSec;
+        totalSec = depSec + travelSec;
 
         let arrStr = `${String(Math.floor(arrSec/3600)%24).padStart(2,'0')}:${String(Math.floor((arrSec%3600)/60)).padStart(2,'0')}`;
         let depStr = `${String(Math.floor(depSec/3600)%24).padStart(2,'0')}:${String(Math.floor((depSec%3600)/60)).padStart(2,'0')}`;
 
         t.timetable.push({ station: st, arr: arrStr, dep: depStr });
-
         let row = document.createElement('tr');
         row.innerHTML = `<td>${st.name}</td><td>${arrStr}</td><td>${depStr}</td>`;
         tbody.appendChild(row);
       });
 
-      alert(`物理演算ダイヤを生成しました（有効ルート探索完了 / 停車駅数: ${routeStations.length}駅）`);
+      alert('ダイヤ生成完了');
       renderLEDPreview(t);
     }
 
