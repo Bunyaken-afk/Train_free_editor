@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>電車内表示器エディタ v4.50 (モバイルコンパクト対応版)</title>
+  <title>電車内表示器エディタ v4.50 (完全修復・漢字エディタ搭載版)</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -12,9 +12,7 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { width: 100vw; height: 100vh; overflow: hidden; background: #1a1a1a; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; }
     
-    /* モバイル・コンパクト対応ヘッダー */
     header { background: #2a2a2a; padding: 4px 8px; display: flex; gap: 4px; align-items: center; border-bottom: 2px solid #444; z-index: 1000; flex-wrap: wrap; height: auto; min-height: 42px; flex-shrink: 0; width: 100vw; }
-    
     .header-group { display: flex; align-items: center; gap: 4px; }
     
     .mode-select {
@@ -35,6 +33,7 @@
     .header-btn.online-share { background: #20c997; color: #000; font-weight: bold; }
     .header-btn.online-browse { background: #ffc107; color: #000; font-weight: bold; }
     .header-btn.test-run { background: #00ffcc; color: #000; font-weight: bold; }
+    .header-btn.font-edit { background: #ff00ff; color: #fff; font-weight: bold; }
 
     .key-guide-box {
       background: #1e1e1e; border: 1px solid #00aaff; border-radius: 4px; padding: 2px 6px; font-size: 10px; color: #00ffcc; display: flex; align-items: center; gap: 4px; white-space: nowrap; max-width: 300px; overflow: hidden; text-overflow: ellipsis;
@@ -43,35 +42,29 @@
     #main-container { flex: 1; display: flex; width: 100vw; height: calc(100vh - 42px); position: relative; overflow: hidden; }
     #map { flex: 1; height: 100%; background: #222; }
 
-    /* モバイル・コンパクト対応サイドバー (幅をスリム化) */
     #sidebar { width: 320px; background: #222; border-left: 2px solid #444; display: flex; flex-direction: column; gap: 6px; padding: 6px; overflow-y: auto; z-index: 1000; flex-shrink: 0; height: 100%; }
     .panel { background: #2a2a2a; border: 1px solid #444; border-radius: 4px; padding: 6px; }
     .panel h3 { font-size: 12px; margin-bottom: 6px; color: #00aaff; border-bottom: 1px solid #444; padding-bottom: 3px; display: flex; justify-content: space-between; align-items: center; }
 
+    /* 車内表示機LEDボードの修正 */
     #display-preview { background: #000; border: 2px solid #333; border-radius: 4px; padding: 6px; text-align: center; }
-    .led-board { background: #111; border: 1px solid #222; padding: 6px; display: flex; justify-content: flex-start; align-items: center; min-height: 50px; overflow-x: auto; }
-    .led-grid { display: flex; gap: 1px; justify-content: flex-start; background: #050505; padding: 4px; border-radius: 3px; }
-    .char-matrix { display: grid; grid-template-columns: repeat(16, 2px); grid-template-rows: repeat(16, 2px); gap: 1px; flex-shrink: 0; }
-    .pixel { width: 2px; height: 2px; background: #222; border-radius: 50%; }
-    .pixel.on { background: #00ff66; box-shadow: 0 0 1px #00ff66; }
+    .led-board { background: #111; border: 1px solid #222; padding: 6px; display: flex; justify-content: flex-start; align-items: center; min-height: 60px; overflow-x: auto; }
+    .led-grid { display: flex; gap: 2px; justify-content: flex-start; background: #050505; padding: 4px; border-radius: 3px; }
+    .char-matrix { display: grid; grid-template-columns: repeat(16, 7px); grid-template-rows: repeat(16, 7px); gap: 1px; flex-shrink: 0; background: #000; padding: 1px; border: 1px solid #222; }
+    .pixel { width: 7px; height: 7px; background: #1a1a1a; border-radius: 1px; }
+    .pixel.on { background: #00ff66; box-shadow: 0 0 2px #00ff66; }
 
     select, input, button { background: #333; color: #fff; border: 1px solid #555; padding: 4px; border-radius: 3px; width: 100%; margin-bottom: 4px; font-size: 11px; }
     button { cursor: pointer; background: #007acc; border: none; font-weight: bold; }
     button:hover { background: #0098ff; }
     
-    .station-marker {
-      width: 12px; height: 12px; border-radius: 50%; background: #007acc; border: 2px solid #fff; box-shadow: 0 0 3px rgba(0,0,0,0.5); cursor: pointer;
-    }
+    .station-marker { width: 12px; height: 12px; border-radius: 50%; background: #007acc; border: 2px solid #fff; box-shadow: 0 0 3px rgba(0,0,0,0.5); cursor: pointer; }
     .station-marker.stop { background: #ff6600; border-color: #ffff00; }
     .station-marker.pass { background: #555555; border-color: #888; }
     .station-marker.no-entry { background: #d9534f; border-color: #fff; box-shadow: 0 0 4px #d9534f; }
-    .station-marker.other-no-stop { background: #6f42c1; border-color: #fff; }
-    .station-marker.other-stop { background: #007bff; border-color: #fff; }
     .station-marker.hub { background: #20c997; border-color: #fff; box-shadow: 0 0 6px #20c997; width: 15px; height: 15px; margin-left: -1.5px; margin-top: -1.5px; }
 
-    .train-marker {
-      width: 14px; height: 14px; border-radius: 50%; background: #ffcc00; border: 2px solid #fff; box-shadow: 0 0 6px #ffcc00; z-index: 1500;
-    }
+    .train-marker { width: 14px; height: 14px; border-radius: 50%; background: #ffcc00; border: 2px solid #fff; box-shadow: 0 0 6px #ffcc00; z-index: 1500; }
 
     .timetable-table { width: 100%; border-collapse: collapse; font-size: 10px; margin-top: 4px; }
     .timetable-table th, .timetable-table td { border: 1px solid #444; padding: 2px; text-align: center; }
@@ -87,29 +80,38 @@
     .train-tab { background: #333; border: 1px solid #555; padding: 3px 6px; font-size: 10px; cursor: pointer; border-radius: 3px 3px 0 0; }
     .train-tab.active { background: #007acc; font-weight: bold; }
 
-    .modal-overlay {
-      display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.9); z-index: 3000; justify-content: center; align-items: center; padding: 15px;
-    }
-    .modal-content-fullscreen {
-      background: #222; border: 2px solid #555; border-radius: 6px; padding: 12px; width: 98vw; height: 95vh; display: flex; flex-direction: column; gap: 8px; overflow: hidden;
-    }
-    .modal-content-normal {
-      background: #222; border: 2px solid #555; border-radius: 6px; padding: 12px; width: 95vw; max-width: 500px; display: flex; flex-direction: column; gap: 8px;
-    }
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.9); z-index: 3000; justify-content: center; align-items: center; padding: 15px; }
+    .modal-content-fullscreen { background: #222; border: 2px solid #555; border-radius: 6px; padding: 12px; width: 98vw; height: 95vh; display: flex; flex-direction: column; gap: 8px; overflow: hidden; }
+    .modal-content-normal { background: #222; border: 2px solid #555; border-radius: 6px; padding: 12px; width: 95vw; max-width: 500px; display: flex; flex-direction: column; gap: 8px; }
 
-    .works-grid-container {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-      gap: 8px;
-      flex: 1;
-      overflow-y: auto;
-      padding: 2px;
-    }
-    .work-card {
-      background: #2a2a2a; border: 1px solid #444; border-radius: 4px; padding: 8px; display: flex; flex-direction: column; justify-content: space-between; gap: 4px; font-size: 10px;
-    }
+    .works-grid-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; flex: 1; overflow-y: auto; padding: 2px; }
+    .work-card { background: #2a2a2a; border: 1px solid #444; border-radius: 4px; padding: 8px; display: flex; flex-direction: column; justify-content: space-between; gap: 4px; font-size: 10px; }
     .work-card-header { display: flex; justify-content: space-between; align-items: center; }
     .tag-badge { background: #17a2b8; color: #fff; padding: 1px 3px; border-radius: 2px; font-size: 8px; display: inline-block; margin-right: 2px; }
+
+    /* 16x16 漢字エディタ専用スタイル */
+    .editor-grid-16 {
+      display: grid;
+      grid-template-columns: repeat(16, 22px);
+      grid-template-rows: repeat(16, 22px);
+      gap: 1px;
+      background: #111;
+      border: 2px solid #444;
+      padding: 4px;
+      margin: 0 auto;
+      touch-action: none;
+    }
+    .editor-pixel {
+      width: 22px;
+      height: 22px;
+      background: #222;
+      border-radius: 2px;
+      cursor: pointer;
+    }
+    .editor-pixel.on {
+      background: #00ff66;
+      box-shadow: 0 0 3px #00ff66;
+    }
   </style>
 </head>
 <body>
@@ -142,6 +144,7 @@
     </div>
     <button class="header-btn optimize" onclick="optimizeAllLinesPoints()" title="間引き実行">🧹</button>
 
+    <button class="header-btn font-edit" onclick="openFontEditorModal()">🔤 16x16フォント</button>
     <button id="track-btn" class="header-btn" onclick="toggleTracking()">🎥 追尾</button>
     <button id="audio-btn" class="header-btn" onclick="toggleAudio()">🔊 音声</button>
     <button id="test-run-btn" class="header-btn test-run" onclick="toggleTestRun()">▶ 試運転</button>
@@ -248,12 +251,34 @@
       </div>
 
       <div class="panel">
-        <h3>📺 表示器</h3>
+        <h3>📺 表示器プレビュー</h3>
         <div id="display-preview">
           <div class="led-board">
             <div id="display-text" class="led-grid"></div>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 16x16 漢字フォントエディタ モーダル -->
+  <div id="font-editor-modal" class="modal-overlay">
+    <div class="modal-content-normal" style="max-width: 480px; text-align: center;">
+      <h3 style="color: #ff00ff; font-size: 13px; margin-bottom: 4px;">🔤 16x16ドット 漢字/文字エディタ</h3>
+      <div style="display:flex; gap:4px; align-items:center; margin-bottom:6px;">
+        <label style="font-size:10px;">編集文字:</label>
+        <input type="text" id="font-target-char" maxlength="1" value="京" style="width:40px; text-align:center; font-size:14px; font-weight:bold; margin:0; padding:2px;" onchange="loadCharToEditor(this.value)">
+        <button onclick="clearFontMatrix()" style="width:auto; padding:2px 6px; font-size:10px; background:#d9534f; margin:0;">全消去</button>
+        <button onclick="fillFontMatrix()" style="width:auto; padding:2px 6px; font-size:10px; background:#007acc; margin:0;">全点灯</button>
+      </div>
+      
+      <div id="editor-grid-container" class="editor-grid-container">
+        <div id="editor-matrix" class="editor-grid-16"></div>
+      </div>
+
+      <div style="display: flex; gap: 6px; margin-top: 10px;">
+        <button onclick="saveCurrentFontChar()" style="flex:1; background: #28a745; font-size:10px; padding:6px;">💾 フォント保存</button>
+        <button onclick="closeFontEditorModal()" style="flex:1; background: #6c757d; font-size:10px; padding:6px;">閉じる</button>
       </div>
     </div>
   </div>
@@ -374,7 +399,7 @@
   </div>
 
   <script>
-    // --- モバイルコンパクト対応エディタ (v4.50) ---
+    // --- 路線追従・種別連動・16x16漢字エディタ搭載版 (v4.50) ---
 
     const CLOUD_API_BIN_URL = 'https://api.jsonbin.io/v3/b/66185c78ad19ca34f860273a';
 
@@ -386,6 +411,106 @@
     let myCreatedWorkIds = JSON.parse(localStorage.getItem('transit_my_created_works') || '{}');
     let userLikedWorks = JSON.parse(localStorage.getItem('transit_user_likes') || '{}');
     let serverWorksCache = [];
+
+    // --- 16x16 フォントデータ管理 ---
+    let customFontData = JSON.parse(localStorage.getItem('transit_custom_font_data') || '{}');
+
+    function openFontEditorModal() {
+      document.getElementById('font-editor-modal').style.display = 'flex';
+      initFontEditorGrid();
+      loadCharToEditor(document.getElementById('font-target-char').value);
+    }
+    function closeFontEditorModal() {
+      document.getElementById('font-editor-modal').style.display = 'none';
+      let activeT = getActiveTrain();
+      if (activeT) renderLEDPreview(activeT);
+    }
+
+    let editorPixels = [];
+    function initFontEditorGrid() {
+      const matrix = document.getElementById('editor-matrix');
+      matrix.innerHTML = '';
+      editorPixels = [];
+      let isDrawing = false;
+      let drawState = true;
+
+      for (let r = 0; r < 16; r++) {
+        editorPixels[r] = [];
+        for (let c = 0; c < 16; c++) {
+          const px = document.createElement('div');
+          px.className = 'editor-pixel';
+          px.dataset.row = r;
+          px.dataset.col = c;
+
+          px.addEventListener('mousedown', (e) => {
+            isDrawing = true;
+            drawState = !px.classList.contains('on');
+            setPixelState(r, c, drawState);
+            e.preventDefault();
+          });
+          px.addEventListener('mouseenter', () => {
+            if (isDrawing) setPixelState(r, c, drawState);
+          });
+
+          matrix.appendChild(px);
+          editorPixels[r][c] = px;
+        }
+      }
+      window.addEventListener('mouseup', () => { isDrawing = false; });
+    }
+
+    function setPixelState(r, c, state) {
+      if (editorPixels[r] && editorPixels[r][c]) {
+        editorPixels[r][c].classList.toggle('on', state);
+      }
+    }
+
+    function clearFontMatrix() {
+      for (let r = 0; r < 16; r++) {
+        for (let c = 0; c < 16; c++) setPixelState(r, c, false);
+      }
+    }
+
+    function fillFontMatrix() {
+      for (let r = 0; r < 16; r++) {
+        for (let c = 0; c < 16; c++) setPixelState(r, c, true);
+      }
+    }
+
+    function loadCharToEditor(char) {
+      if (!char || char.length === 0) return;
+      clearFontMatrix();
+      let matrixArr = customFontData[char];
+      if (matrixArr && Array.isArray(matrixArr) && matrixArr.length === 16) {
+        for (let r = 0; r < 16; r++) {
+          let rowVal = matrixArr[r];
+          for (let c = 0; c < 16; c++) {
+            let bit = (rowVal & (1 << (15 - c))) !== 0;
+            setPixelState(r, c, bit);
+          }
+        }
+      }
+    }
+
+    function saveCurrentFontChar() {
+      let char = document.getElementById('font-target-char').value.charAt(0);
+      if (!char) return alert('文字を入力してください');
+      let matrixArr = [];
+      for (let r = 0; r < 16; r++) {
+        let rowVal = 0;
+        for (let c = 0; c < 16; c++) {
+          if (editorPixels[r][c].classList.contains('on')) {
+            rowVal |= (1 << (15 - c));
+          }
+        }
+        matrixArr.push(rowVal);
+      }
+      customFontData[char] = matrixArr;
+      localStorage.setItem('transit_custom_font_data', JSON.stringify(customFontData));
+      alert(`文字「${char}」の16x16フォントを保存しました！`);
+      closeFontEditorModal();
+    }
+
 
     async function dbFetchAllWorksFromServer() {
       try {
@@ -413,18 +538,12 @@
       try {
         let currentWorks = await dbFetchAllWorksFromServer();
         let existingIdx = currentWorks.findIndex(w => w.id === workData.id);
-        if (existingIdx >= 0) {
-          currentWorks[existingIdx] = workData;
-        } else {
-          currentWorks.unshift(workData);
-        }
+        if (existingIdx >= 0) currentWorks[existingIdx] = workData;
+        else currentWorks.unshift(workData);
 
         let res = await fetch(CLOUD_API_BIN_URL, {
           method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Access-Key': '$2a$10$7Z8Kq9Z8Kq9Z8Kq9Z8Kq9O...'
-          },
+          headers: { 'Content-Type': 'application/json', 'X-Access-Key': '$2a$10$7Z8Kq9Z8Kq9Z8Kq9Z8Kq9O...' },
           body: JSON.stringify({ works: currentWorks })
         });
         if (!res.ok) throw new Error('サーバー保存失敗');
@@ -512,7 +631,7 @@
       switch (mode) {
         case 'pan': guideText = "✋ 地図移動"; break;
         case 'plan': guideText = "📐 計画線 (ドラッグ)"; break;
-        case 'express-config': guideText = `⚡ ${expName} 設定`; break;
+        case 'express-config': guideText = `⚡ ${expName} 停車設定`; break;
         case 'station': guideText = "🚉 駅配置"; break;
         case 'transfer': guideText = "🔄 乗換統合"; break;
         case 'start': guideText = "🟢 始点設定"; break;
@@ -540,6 +659,15 @@
       btn.classList.toggle('toggle-on', isAudioOn);
     }
 
+    function getNearestLineAndIndexOnLine(latlng, lineObj) {
+      let minDist = Infinity, minIdx = 0;
+      for (let i = 0; i < lineObj.points.length; i++) {
+        let d = latlng.distanceTo(lineObj.points[i]);
+        if (d < minDist) { minDist = d; minIdx = i; }
+      }
+      return { index: minIdx, dist: minDist };
+    }
+
     function findLineSegmentBetweenStations(stA, stB) {
       for (let line of lines) {
         let minDistA = Infinity, minDistB = Infinity;
@@ -555,11 +683,8 @@
 
         if (minDistA < 500 && minDistB < 500) {
           let pts = [];
-          if (idxA < idxB) {
-            pts = line.points.slice(idxA, idxB + 1);
-          } else {
-            pts = line.points.slice(idxB, idxA + 1).reverse();
-          }
+          if (idxA < idxB) pts = line.points.slice(idxA, idxB + 1);
+          else pts = line.points.slice(idxB, idxA + 1).reverse();
           return pts.map(p => L.latLng(p.lat || p[0], p.lng || p[1]));
         }
       }
@@ -567,11 +692,8 @@
     }
 
     function toggleTestRun() {
-      if (testRunState.isRunning) {
-        stopTestRun();
-      } else {
-        startTestRun();
-      }
+      if (testRunState.isRunning) stopTestRun();
+      else startTestRun();
     }
 
     function startTestRun() {
@@ -647,7 +769,6 @@
           return;
         }
 
-        let d = testRunState.currentSegDist;
         let stepDist = seg.maxSpeed * 0.05;
         testRunState.currentSegDist += stepDist;
 
@@ -763,7 +884,6 @@
       document.getElementById('browse-modal').style.display = 'flex';
       await renderBrowseWorks();
     }
-
     function closeBrowseModal() { document.getElementById('browse-modal').style.display = 'none'; }
 
     async function renderBrowseWorks() {
@@ -780,7 +900,6 @@
         let matchName = w.title.toLowerCase().includes(nameQuery);
         let matchTag = tagQuery === '' || (w.tags && w.tags.some(t => t.toLowerCase().includes(tagQuery)));
         if (!matchName || !matchTag) return false;
-
         if (filterBy === 'mine') return myCreatedWorkIds[w.id] || w.authorId === myUserId;
         if (filterBy === 'liked') return !!userLikedWorks[w.id];
         return true;
@@ -805,7 +924,6 @@
         let sCount = w.stationCount || (w.payload && w.payload.stations ? w.payload.stations.length : 0);
         let card = document.createElement('div');
         card.className = 'work-card';
-        
         let tagsHtml = w.tags ? w.tags.map(tag => `<span class="tag-badge">#${tag}</span>`).join('') : '';
 
         card.innerHTML = `
@@ -818,13 +936,9 @@
             <div style="height:16px; overflow:hidden;">${tagsHtml}</div>
           </div>
           <div style="display: flex; flex-direction: column; gap: 2px;">
-            <button onclick="toggleLikeWork('${w.id}')" style="font-size:8px; padding:2px; background:${isLiked ? '#d9534f' : '#333'};">
-              ${isLiked ? '❤️ 解除' : '🤍 いいね'}
-            </button>
+            <button onclick="toggleLikeWork('${w.id}')" style="font-size:8px; padding:2px; background:${isLiked ? '#d9534f' : '#333'};">${isLiked ? '❤️ 解除' : '🤍 いいね'}</button>
             <button onclick="previewWork('${w.id}')" style="font-size:8px; padding:2px; background:#17a2b8;">👁️ プレビュー</button>
-            <button onclick="loadWorkToEditor('${w.id}', 'overwrite')" style="font-size:8px; padding:2px; background:${isLiked || isMine ? '#28a745' : '#555'};">
-              📂 読込
-            </button>
+            <button onclick="loadWorkToEditor('${w.id}', 'overwrite')" style="font-size:8px; padding:2px; background:${isLiked || isMine ? '#28a745' : '#555'};">📂 読込</button>
           </div>
         `;
         container.appendChild(card);
@@ -866,7 +980,6 @@
         if (work.payload.lines) work.payload.lines.forEach(l => L.polyline(l.points, {color: l.color, weight: 3}).addTo(subMap));
       }, 200);
     }
-
     function closePreviewModal() { document.getElementById('preview-modal').style.display = 'none'; }
 
     async function loadWorkToEditor(workId, mode) {
@@ -919,7 +1032,7 @@
         id: s.id, name: s.name, latlng: [Number(s.latlng.lat.toFixed(5)), Number(s.latlng.lng.toFixed(5))],
         isHub: s.isHub || false, mergedStationIds: s.mergedStationIds || [], connectedLineIds: s.connectedLineIds || []
       }));
-      const data = { folders: folders.map(f => ({ id: f.id, name: f.name, color: f.color, isBranchFolder: f.isBranchFolder })), lines: optimizedLines, stations: optimizedStations, expressTypes, expressStops, fontData: {} };
+      const data = { folders: folders.map(f => ({ id: f.id, name: f.name, color: f.color, isBranchFolder: f.isBranchFolder })), lines: optimizedLines, stations: optimizedStations, expressTypes, expressStops, customFontData };
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `train_editor_${Date.now()}.json`; a.click();
     }
@@ -938,6 +1051,7 @@
               expressTypes = [{ id: 'express_local_fixed', name: '各駅停車', color: '#007acc', isFixed: true }]; 
               expressStops = {};
             }
+            if (data.customFontData) { Object.assign(customFontData, data.customFontData); localStorage.setItem('transit_custom_font_data', JSON.stringify(customFontData)); }
             if (data.expressTypes) data.expressTypes.forEach(et => { if (!expressTypes.some(x => x.name === et.name)) expressTypes.push(et); });
             if (data.expressStops) for (let k in data.expressStops) { if (!expressStops[k]) expressStops[k] = {}; Object.assign(expressStops[k], data.expressStops[k]); }
             if (data.folders) data.folders.forEach(f => { if (!folders.some(x => x.id === f.id)) folders.push(f); });
@@ -999,15 +1113,7 @@
         .catch(err => alert('キャプチャ失敗'));
     }
 
-    function getNearestLineAndIndexOnLine(latlng, lineObj) {
-      let minDist = Infinity, minIdx = 0;
-      for (let i = 0; i < lineObj.points.length; i++) {
-        let d = latlng.distanceTo(lineObj.points[i]);
-        if (d < minDist) { minDist = d; minIdx = i; }
-      }
-      return { index: minIdx, dist: minDist };
-    }
-
+    // --- 完全修正版 デフォルメ路線図描画 ---
     function renderDeformedRouteMap() {
       const canvas = document.getElementById('deformed-canvas');
       const ctx = canvas.getContext('2d');
@@ -1033,7 +1139,7 @@
         let sortedStations = stations.map(st => {
           let match = getNearestLineAndIndexOnLine(st.latlng, lineObj);
           return { st, idx: match.index, dist: match.dist };
-        }).filter(item => item.dist < 500).sort((a, b) => a.idx - b.idx).map(item => item.st);
+        }).filter(item => item.dist < 800).sort((a, b) => a.idx - b.idx).map(item => item.st);
 
         if (sortedStations.length < 2) return;
         const folder = folders.find(f => f.id === lineObj.folderId);
@@ -1053,8 +1159,8 @@
         ctx.fillStyle = pos.isHub ? '#20c997' : '#007acc'; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = pos.isHub ? 2.5 : 2;
         let r = pos.isHub ? 7 : 5;
         ctx.beginPath(); ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-        ctx.fillStyle = '#ffffff'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-        ctx.fillText(pos.name, pos.x, pos.y - (r + 3));
+        ctx.fillStyle = '#ffffff'; ctx.font = '11px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+        ctx.fillText(pos.name, pos.x, pos.y - (r + 4));
       });
     }
 
@@ -1488,8 +1594,6 @@
         if (status === 'stop') bgColor = '#ff6600';     
         else if (status === 'pass') bgColor = '#555555'; 
         else if (status === 'no-entry') bgColor = '#d9534f'; 
-        else if (status === 'other-no-stop') bgColor = '#6f42c1'; 
-        else if (status === 'other-stop') bgColor = '#007bff'; 
       }
       let size = isHub ? 15 : 12;
       return L.divIcon({
@@ -1514,7 +1618,7 @@
         let stStatus = (currentExp && !currentExp.isFixed && expressStops[currentExp.id]) ? (expressStops[currentExp.id][st.id] || 'stop') : 'stop';
 
         st.marker.setIcon(createStationMarkerIcon(expName, st.isHub, stStatus));
-        let statusLabels = { 'stop': '停', 'pass': '通', 'no-entry': '禁', 'other-no-stop': '他停禁', 'other-stop': '他停可' };
+        let statusLabels = { 'stop': '停', 'pass': '通', 'no-entry': '禁' };
         let statusText = currentExp && !currentExp.isFixed ? ` (${statusLabels[stStatus] || stStatus})` : '';
         st.marker.bindTooltip(`${st.name}${statusText}`, { permanent: true, direction: 'top' });
       });
@@ -1653,11 +1757,107 @@
       t.stopTimeSec = parseInt(document.getElementById('stop-time').value, 10) || 3;
     }
 
+    function findAllPossibleRouteStations(startSt, endSt, trainExpressName) {
+      let adj = {};
+      stations.forEach(s => { adj[s.id] = []; });
+
+      lines.forEach(lineObj => {
+        let lineSts = stations.filter(st => getNearestLineAndIndexOnLine(st.latlng, lineObj).dist < 500)
+          .sort((a, b) => getNearestLineAndIndexOnLine(a.latlng, lineObj).index - getNearestLineAndIndexOnLine(b.latlng, lineObj).index);
+        
+        for (let i = 0; i < lineSts.length - 1; i++) {
+          let u = lineSts[i].id, v = lineSts[i+1].id;
+          if (!adj[u].includes(v)) adj[u].push(v);
+          if (!adj[v].includes(u)) adj[v].push(u);
+        }
+      });
+
+      for (let i = 0; i < stations.length; i++) {
+        for (let j = i + 1; j < stations.length; j++) {
+          let s1 = stations[i], s2 = stations[j];
+          if (s1.latlng.distanceTo(s2.latlng) < 500) {
+            if (!adj[s1.id].includes(s2.id)) adj[s1.id].push(s2.id);
+            if (!adj[s2.id].includes(s1.id)) adj[s2.id].push(s1.id);
+          }
+        }
+      }
+
+      let stMap = {};
+      stations.forEach(s => { stMap[s.id] = s; });
+
+      let expType = expressTypes.find(e => e.name === trainExpressName);
+      let stopsConfig = (expType && expressStops[expType.id]) ? expressStops[expType.id] : {};
+
+      let allPaths = [];
+      function dfs(currId, targetId, visited, path) {
+        if (currId === targetId) { allPaths.push([...path]); return; }
+        if (path.length > 40) return;
+        for (let nextId of (adj[currId] || [])) {
+          if (!visited.has(nextId)) {
+            let isTerminal = (nextId === targetId);
+            let status = stopsConfig[nextId] || 'stop';
+            if (!isTerminal && status === 'no-entry') continue;
+
+            visited.add(nextId);
+            path.push(stMap[nextId]);
+            dfs(nextId, targetId, visited, path);
+            path.pop();
+            visited.delete(nextId);
+          }
+        }
+      }
+
+      let visited = new Set([startSt.id]);
+      dfs(startSt.id, endSt.id, visited, [startSt]);
+      return allPaths;
+    }
+
+    function getFullRouteStationsForTrain(t) {
+      if (!t.startStation || !t.endStation) return [];
+      let candidatePaths = findAllPossibleRouteStations(t.startStation, t.endStation, t.expressName);
+      let expType = expressTypes.find(e => e.name === t.expressName);
+      let stopsConfig = (expType && expressStops[expType.id]) ? expressStops[expType.id] : {};
+
+      let validPath = null;
+      for (let path of candidatePaths) {
+        let hasNoEntry = false;
+        for (let i = 0; i < path.length; i++) {
+          let st = path[i];
+          let isTerminal = (i === 0 || i === path.length - 1);
+          let status = stopsConfig[st.id] || 'stop';
+          if (!isTerminal && status === 'no-entry') { hasNoEntry = true; break; }
+        }
+        if (!hasNoEntry) { validPath = path; break; }
+      }
+      return validPath;
+    }
+
     function generateTimetableForActiveTrain() {
       const t = getActiveTrain();
       if (!t || !t.startStation || !t.endStation) return alert('始点と終点を設定してください');
 
-      let routeStations = [t.startStation, t.endStation]; 
+      let rawRouteStations = getFullRouteStationsForTrain(t);
+      if (!rawRouteStations) {
+        alert('❌ 【ルート探索失敗】\n有効なルート上に進入禁止駅が含まれているか、到達可能な路線がつながっていません。');
+        return;
+      }
+
+      let routeStations = [];
+      let expType = expressTypes.find(e => e.name === t.expressName);
+      let stopsConfig = (expType && expressStops[expType.id]) ? expressStops[expType.id] : {};
+
+      rawRouteStations.forEach((st, idx) => {
+        let isTerminal = (idx === 0 || idx === rawRouteStations.length - 1);
+        if (isTerminal) { routeStations.push(st); return; }
+
+        let status = stopsConfig[st.id] || 'stop';
+        if (t.expressName === '各駅停車') {
+          if (status !== 'pass' && status !== 'no-entry') routeStations.push(st);
+        } else {
+          if (status === 'stop') routeStations.push(st);
+        }
+      });
+
       let tbody = document.getElementById('timetable-body');
       tbody.innerHTML = '';
       t.timetable = [];
@@ -1667,10 +1867,20 @@
       let totalSec = h * 3600 + m * 60;
 
       routeStations.forEach((st, idx) => {
-        let travelSec = idx === 0 ? 0 : 60;
-        let arrSec = totalSec;
+        let travelSec = 60;
+        if (idx > 0) {
+          let prevSt = routeStations[idx - 1];
+          let segPoints = findLineSegmentBetweenStations(prevSt, st);
+          let distMeters = 0;
+          for (let i = 0; i < segPoints.length - 1; i++) distMeters += segPoints[i].distanceTo(segPoints[i+1]);
+          let distKm = distMeters / 1000;
+          let speedKmH = t.speedKmH || 60;
+          travelSec = Math.max(30, Math.round((distKm / speedKmH) * 3600 + 20));
+        }
+
+        let arrSec = idx === 0 ? totalSec : totalSec + travelSec;
         let depSec = arrSec + (idx === routeStations.length - 1 ? 0 : t.stopTimeSec);
-        totalSec = depSec + travelSec;
+        totalSec = depSec;
 
         let arrStr = `${String(Math.floor(arrSec/3600)%24).padStart(2,'0')}:${String(Math.floor((arrSec%3600)/60)).padStart(2,'0')}`;
         let depStr = `${String(Math.floor(depSec/3600)%24).padStart(2,'0')}:${String(Math.floor((depSec%3600)/60)).padStart(2,'0')}`;
@@ -1681,26 +1891,43 @@
         tbody.appendChild(row);
       });
 
-      alert('ダイヤ生成完了');
+      alert(`ダイヤ生成完了（停車駅数: ${routeStations.length}駅）`);
       renderLEDPreview(t);
     }
 
+    // --- 車内表示機LED 16x16プレビュー修復描画 ---
     function renderLEDPreview(train) {
       const container = document.getElementById('display-text');
       container.innerHTML = '';
       if (!train.timetable || train.timetable.length === 0) return;
 
-      let textToShow = `至 ${train.endStation ? train.endStation.name : ''} [${train.expressName}]`;
+      let textToShow = `${train.expressName} 至 ${train.endStation ? train.endStation.name : '未設定'}`;
+      
       for (let i = 0; i < textToShow.length; i++) {
+        let char = textToShow.charAt(i);
         let matrix = document.createElement('div');
         matrix.className = 'char-matrix';
-        for (let p = 0; p < 256; p++) {
-          let px = document.createElement('div');
-          px.className = 'pixel' + (p % 3 === 0 ? ' on' : '');
-          matrix.appendChild(px);
+        
+        let fontMatrix = customFontData[char];
+        for (let r = 0; r < 16; r++) {
+          let rowVal = fontMatrix ? fontMatrix[r] : getDefaultCharBitmap(char, r);
+          for (let c = 0; c < 16; c++) {
+            let px = document.createElement('div');
+            let isOn = (rowVal & (1 << (15 - c))) !== 0;
+            px.className = 'pixel' + (isOn ? ' on' : '');
+            matrix.appendChild(px);
+          }
         }
         container.appendChild(matrix);
       }
+    }
+
+    function getDefaultCharBitmap(char, row) {
+      // 簡易フォントフォールバック（文字がない場合のドットパターン）
+      if (char === '各' || char === '停' || char === '車' || char === '特' || char === '急') {
+        return 0b0111111001111110;
+      }
+      return (row % 2 === 0 && row > 3 && row < 12) ? 0b0011110000111100 : 0;
     }
 
     addNewTrain();
