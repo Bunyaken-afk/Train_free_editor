@@ -598,7 +598,7 @@
 
     const map = L.map('map', { dragging: true, preferCanvas: true }).setView([39.45, 141.95], 10);
 
-    // 修正箇所：末尾に .png を追加して正しくタイル画像を読み込むように修正
+    // 地理院タイルのURL修正済み
     L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png', {
       attribution: '&copy; 国土地理院',
       maxZoom: 18,
@@ -1742,276 +1742,182 @@
     function createNewTrainObject(id, name) {
       return { id, name, startStation: null, viaStations: [], endStation: null, expressName: '各駅停車', speedKmH: 60, stopTimeSec: 3, timetable: [], marker: null, customDisplayMode: false, customDisplayText: '' };
     }
+
     function addNewTrain() {
-      let t = createNewTrainObject(Date.now(), `列車 ${trainList.length + 1}`);
-      trainList.push(t);
-      selectTrain(t.id);
+      let newId = 'train_' + Date.now();
+      let trainObj = createNewTrainObject(newId, `列車 ${trainList.length + 1}`);
+      trainList.push(trainObj);
+      activeTrainId = newId;
+      renderTrainTabs();
+      loadTrainToEditor(newId);
     }
-    function selectTrain(id) { activeTrainId = id; renderTrainTabs(); loadActiveTrainToUI(); }
+
     function renderTrainTabs() {
-      const c = document.getElementById('train-tabs-container'); c.innerHTML = '';
+      let container = document.getElementById('train-tabs-container');
+      container.innerHTML = '';
       trainList.forEach(t => {
-        let b = document.createElement('button');
-        b.className = `train-tab ${t.id === activeTrainId ? 'active' : ''}`;
-        b.innerText = t.name; b.onclick = () => selectTrain(t.id);
-        c.appendChild(b);
+        let tab = document.createElement('div');
+        tab.className = `train-tab ${t.id === activeTrainId ? 'active' : ''}`;
+        tab.innerText = t.name;
+        tab.onclick = () => loadTrainToEditor(t.id);
+        container.appendChild(tab);
       });
     }
-    function getActiveTrain() { return trainList.find(t => t.id === activeTrainId); }
-    
-    function loadActiveTrainToUI() {
+
+    function getActiveTrain() {
+      return trainList.find(t => t.id === activeTrainId);
+    }
+
+    function loadTrainToEditor(trainId) {
+      activeTrainId = trainId;
+      renderTrainTabs();
       let t = getActiveTrain();
       if (!t) return;
       document.getElementById('active-train-title').innerText = t.name;
       document.getElementById('start-name').innerText = t.startStation ? t.startStation.name : '未設定';
       document.getElementById('end-name').innerText = t.endStation ? t.endStation.name : '未設定';
       document.getElementById('train-express-name').value = t.expressName || '各駅停車';
-      document.getElementById('train-speed').value = t.speedKmH;
-      document.getElementById('stop-time').value = t.stopTimeSec;
-      
-      // 手動カスタム表示欄の状態反映
-      document.getElementById('display-custom-toggle').checked = !!t.customDisplayMode;
-      const customInput = document.getElementById('display-custom-text');
-      customInput.disabled = !t.customDisplayMode;
-      if (t.customDisplayMode) {
-        customInput.value = t.customDisplayText || '';
-      } else {
-        customInput.value = `${t.expressName || '各駅停車'} 至 ${t.endStation ? t.endStation.name : '未設定'}`;
-      }
-
+      document.getElementById('train-speed').value = t.speedKmH || 60;
+      document.getElementById('stop-time').value = t.stopTimeSec || 3;
+      document.getElementById('display-custom-toggle').checked = t.customDisplayMode || false;
+      document.getElementById('display-custom-text').value = t.customDisplayText || '';
+      document.getElementById('display-custom-text').disabled = !t.customDisplayMode;
       updateViaDisplay();
+      renderTimetableTable(t.timetable);
       renderLEDPreview(t);
     }
 
     function updateActiveTrainConfig() {
       let t = getActiveTrain();
       if (!t) return;
-      t.expressName = document.getElementById('train-express-name').value.trim();
+      t.expressName = document.getElementById('train-express-name').value;
       t.speedKmH = parseFloat(document.getElementById('train-speed').value) || 60;
       t.stopTimeSec = parseInt(document.getElementById('stop-time').value, 10) || 3;
-      notifyTrainConfigChanged();
+      renderLEDPreview(t);
     }
 
     function notifyTrainConfigChanged() {
       let t = getActiveTrain();
-      if (!t) return;
-      if (!t.customDisplayMode) {
-        document.getElementById('display-custom-text').value = `${t.expressName || '各駅停車'} 至 ${t.endStation ? t.endStation.name : '未設定'}`;
-      }
-      renderLEDPreview(t);
+      if (t) renderLEDPreview(t);
     }
 
-    // --- 車内表示機の自動作成＆カスタム機能 ---
     function toggleDisplayCustomMode() {
       let t = getActiveTrain();
       if (!t) return;
-      let isChecked = document.getElementById('display-custom-toggle').checked;
-      t.customDisplayMode = isChecked;
-      const customInput = document.getElementById('display-custom-text');
-      customInput.disabled = !isChecked;
-
-      if (isChecked) {
-        if (!t.customDisplayText) {
-          t.customDisplayText = `${t.expressName || '各駅停車'} 至 ${t.endStation ? t.endStation.name : '未設定'}`;
-        }
-        customInput.value = t.customDisplayText;
-      } else {
-        customInput.value = `${t.expressName || '各駅停車'} 至 ${t.endStation ? t.endStation.name : '未設定'}`;
-      }
+      t.customDisplayMode = document.getElementById('display-custom-toggle').checked;
+      document.getElementById('display-custom-text').disabled = !t.customDisplayMode;
       renderLEDPreview(t);
     }
 
     function onDisplayCustomInputChanged() {
       let t = getActiveTrain();
       if (!t) return;
-      if (t.customDisplayMode) {
-        t.customDisplayText = document.getElementById('display-custom-text').value;
-        renderLEDPreview(t);
-      }
+      t.customDisplayText = document.getElementById('display-custom-text').value;
+      if (t.customDisplayMode) renderLEDPreview(t);
     }
 
     function autoUpdateDisplayMessage() {
       let t = getActiveTrain();
-      if (!t) return;
-      t.customDisplayMode = false;
-      document.getElementById('display-custom-toggle').checked = false;
-      document.getElementById('display-custom-text').disabled = true;
-      notifyTrainConfigChanged();
-      alert('表示を自動作成モード（種別＋行先）に同期しました！');
-    }
-
-    function findSubPathBetweenStations(fromSt, toSt, trainExpressName) {
-      let adj = {};
-      stations.forEach(s => { adj[s.id] = []; });
-
-      lines.forEach(lineObj => {
-        let lineSts = stations.filter(st => getNearestLineAndIndexOnLine(st.latlng, lineObj).dist < 500)
-          .sort((a, b) => getNearestLineAndIndexOnLine(a.latlng, lineObj).index - getNearestLineAndIndexOnLine(b.latlng, lineObj).index);
-        
-        for (let i = 0; i < lineSts.length - 1; i++) {
-          let u = lineSts[i].id, v = lineSts[i+1].id;
-          if (!adj[u].includes(v)) adj[u].push(v);
-          if (!adj[v].includes(u)) adj[v].push(u);
-        }
-      });
-
-      for (let i = 0; i < stations.length; i++) {
-        for (let j = i + 1; j < stations.length; j++) {
-          let s1 = stations[i], s2 = stations[j];
-          if (s1.latlng.distanceTo(s2.latlng) < 500) {
-            if (!adj[s1.id].includes(s2.id)) adj[s1.id].push(s2.id);
-            if (!adj[s2.id].includes(s1.id)) adj[s2.id].push(s1.id);
-          }
-        }
-      }
-
-      let stMap = {};
-      stations.forEach(s => { stMap[s.id] = s; });
-
-      let expType = expressTypes.find(e => e.name === trainExpressName);
-      let stopsConfig = (expType && expressStops[expType.id]) ? expressStops[expType.id] : {};
-
-      let foundPath = null;
-      function dfs(currId, targetId, visited, path) {
-        if (foundPath) return;
-        if (currId === targetId) { foundPath = [...path]; return; }
-        if (path.length > 40) return;
-        for (let nextId of (adj[currId] || [])) {
-          if (!visited.has(nextId)) {
-            let isTerminal = (nextId === targetId);
-            let status = stopsConfig[nextId] || 'stop';
-            if (!isTerminal && status === 'no-entry') continue;
-
-            visited.add(nextId);
-            path.push(stMap[nextId]);
-            dfs(nextId, targetId, visited, path);
-            path.pop();
-            visited.delete(nextId);
-          }
-        }
-      }
-
-      let visited = new Set([fromSt.id]);
-      dfs(fromSt.id, toSt.id, visited, [fromSt]);
-      return foundPath;
-    }
-
-    function getFullRouteStationsForTrain(t) {
-      if (!t.startStation || !t.endStation) return [];
-      let waypoints = [t.startStation, ...(t.viaStations || []), t.endStation];
-      let fullPath = [];
-
-      for (let i = 0; i < waypoints.length - 1; i++) {
-        let subPath = findSubPathBetweenStations(waypoints[i], waypoints[i+1], t.expressName);
-        if (!subPath) return null; 
-        if (i > 0) {
-          subPath.shift(); 
-        }
-        fullPath = fullPath.concat(subPath);
-      }
-      return fullPath;
-    }
-
-    function generateTimetableForActiveTrain() {
-      const t = getActiveTrain();
-      if (!t || !t.startStation || !t.endStation) return alert('始点と終点を設定してください');
-
-      let rawRouteStations = getFullRouteStationsForTrain(t);
-      if (!rawRouteStations) {
-        alert('❌ 【ルート探索失敗】\n有効なルート上に進入禁止駅が含まれているか、経由地を含めて到達可能な路線がつながっていません。');
-        return;
-      }
-
-      let routeStations = [];
-      let expType = expressTypes.find(e => e.name === t.expressName);
-      let stopsConfig = (expType && expressStops[expType.id]) ? expressStops[expType.id] : {};
-
-      rawRouteStations.forEach((st, idx) => {
-        let isTerminal = (idx === 0 || idx === rawRouteStations.length - 1);
-        let isVia = t.viaStations && t.viaStations.some(v => v.id === st.id);
-        if (isTerminal || isVia) { routeStations.push(st); return; }
-
-        let status = stopsConfig[st.id] || 'stop';
-        if (t.expressName === '各駅停車') {
-          if (status !== 'pass' && status !== 'no-entry') routeStations.push(st);
-        } else {
-          if (status === 'stop') routeStations.push(st);
-        }
-      });
-
-      let tbody = document.getElementById('timetable-body');
-      tbody.innerHTML = '';
-      t.timetable = [];
-
-      let currentTime = document.getElementById('timetable-start-time').value || '08:00';
-      let [h, m] = currentTime.split(':').map(Number);
-      let totalSec = h * 3600 + m * 60;
-
-      routeStations.forEach((st, idx) => {
-        let travelSec = 60;
-        if (idx > 0) {
-          let prevSt = routeStations[idx - 1];
-          let segPoints = findLineSegmentBetweenStations(prevSt, st);
-          let distMeters = 0;
-          for (let i = 0; i < segPoints.length - 1; i++) distMeters += segPoints[i].distanceTo(segPoints[i+1]);
-          let distKm = distMeters / 1000;
-          let speedKmH = t.speedKmH || 60;
-          travelSec = Math.max(30, Math.round((distKm / speedKmH) * 3600 + 20));
-        }
-
-        let arrSec = idx === 0 ? totalSec : totalSec + travelSec;
-        let depSec = arrSec + (idx === routeStations.length - 1 ? 0 : t.stopTimeSec);
-        totalSec = depSec;
-
-        let arrStr = `${String(Math.floor(arrSec/3600)%24).padStart(2,'0')}:${String(Math.floor((arrSec%3600)/60)).padStart(2,'0')}`;
-        let depStr = `${String(Math.floor(depSec/3600)%24).padStart(2,'0')}:${String(Math.floor((depSec%3600)/60)).padStart(2,'0')}`;
-
-        t.timetable.push({ station: st, arr: arrStr, dep: depStr });
-        let row = document.createElement('tr');
-        row.innerHTML = `<td>${st.name}</td><td>${arrStr}</td><td>${depStr}</td>`;
-        tbody.appendChild(row);
-      });
-
-      alert(`ダイヤ生成完了（停車駅数: ${routeStations.length}駅）`);
+      if (!t || !t.endStation) return alert('終点が設定されていません');
+      let msg = `${t.expressName || '各駅停車'} ${t.endStation.name}`;
+      t.customDisplayText = msg;
+      document.getElementById('display-custom-text').value = msg;
+      t.customDisplayMode = true;
+      document.getElementById('display-custom-toggle').checked = true;
+      document.getElementById('display-custom-text').disabled = false;
       renderLEDPreview(t);
     }
 
-    // --- 車内表示機LED 16x16プレビュー描画 ---
-    function renderLEDPreview(train) {
+    const defaultFont16 = {
+      '各': [0x0,0x2440,0x1248,0x2444,0x4f7e,0x1440,0x2440,0x4f7e,0x2444,0x1248,0x2450,0x4442,0x2840,0x117e,0x0,0x0],
+      '駅': [0x0,0x7ffa,0x4002,0x7ffa,0x4102,0x7ffa,0x4102,0x7ffa,0x4102,0x4102,0x7ffa,0x4102,0x4102,0x7ffa,0x0,0x0],
+      '停': [0x0,0x3e20,0x2220,0x3a20,0x223c,0x2220,0x3e20,0x2220,0x223c,0x2220,0x3e20,0x2020,0x3ffc,0x0,0x0,0x0],
+      '車': [0x0,0x7ffe,0x4002,0x7ffe,0x4422,0x4422,0x7ffe,0x4422,0x4422,0x7ffe,0x4002,0x4002,0x7ffe,0x0,0x0,0x0],
+      '行': [0x0,0x2220,0x33e0,0x2220,0x3e3c,0x2222,0x2222,0x3e3c,0x2220,0x33e0,0x2220,0x2020,0x3ffc,0x0,0x0,0x0],
+      '特': [0x0,0x1080,0x1080,0x7fea,0x1080,0x1080,0x3f88,0x2088,0x3f88,0x2088,0x3f88,0x2000,0x3ffe,0x0,0x0,0x0],
+      '急': [0x0,0x3100,0x2920,0x2540,0x2380,0x3fe0,0x2220,0x2220,0x3be0,0x22a0,0x2260,0x2020,0x3ffc,0x0,0x0,0x0],
+      '通': [0x0,0x1180,0x1180,0x7fea,0x1180,0x1180,0x3f88,0x2088,0x3f88,0x2088,0x3f88,0x2000,0x3ffe,0x0,0x0,0x0],
+    };
+
+    function getFontMatrix16(char) {
+      if (customFontData[char] && Array.isArray(customFontData[char])) return customFontData[char];
+      if (defaultFont16[char]) return defaultFont16[char];
+      return [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
+    }
+
+    function renderLEDPreview(t) {
       const container = document.getElementById('display-text');
       container.innerHTML = '';
-      if (!train) return;
+      let text = t.customDisplayMode && t.customDisplayText ? t.customDisplayText : `${t.expressName || '各駅停車'} ${t.endStation ? t.endStation.name : '未設定'}`;
 
-      let textToShow = train.customDisplayMode ? (train.customDisplayText || '') : `${train.expressName} 至 ${train.endStation ? train.endStation.name : '未設定'}`;
-      
-      for (let i = 0; i < textToShow.length; i++) {
-        let char = textToShow.charAt(i);
-        let matrix = document.createElement('div');
-        matrix.className = 'char-matrix';
-        
-        let fontMatrix = customFontData[char];
+      for (let i = 0; i < text.length; i++) {
+        let ch = text.charAt(i);
+        let matrix = getFontMatrix16(ch);
+        let charDiv = document.createElement('div');
+        charDiv.className = 'char-matrix';
+
         for (let r = 0; r < 16; r++) {
-          let rowVal = fontMatrix ? fontMatrix[r] : getDefaultCharBitmap(char, r);
+          let rowVal = matrix[r] || 0;
           for (let c = 0; c < 16; c++) {
             let px = document.createElement('div');
-            let isOn = (rowVal & (1 << (15 - c))) !== 0;
-            px.className = 'pixel' + (isOn ? ' on' : '');
-            matrix.appendChild(px);
+            px.className = 'pixel';
+            if ((rowVal & (1 << (15 - c))) !== 0) px.classList.add('on');
+            charDiv.appendChild(px);
           }
         }
-        container.appendChild(matrix);
+        container.appendChild(charDiv);
       }
     }
 
-    function getDefaultCharBitmap(char, row) {
-      if (char === '各' || char === '停' || char === '車' || char === '特' || char === '急') {
-        return 0b0111111001111110;
-      }
-      return (row % 2 === 0 && row > 3 && row < 12) ? 0b0011110000111100 : 0;
+    function generateTimetableForActiveTrain() {
+      let t = getActiveTrain();
+      if (!t || !t.startStation || !t.endStation) return alert('始点と終点を設定してください');
+      let routeStops = [t.startStation];
+      t.viaStations.forEach(st => routeStops.push(st));
+      if (!routeStops.some(s => s.id === t.endStation.id)) routeStops.push(t.endStation);
+
+      let startTimeStr = document.getElementById('timetable-start-time').value || '08:00';
+      let [h, m] = startTimeStr.split(':').map(Number);
+      let currentTimeSec = h * 3600 + m * 60;
+      let defaultTravel = parseFloat(document.getElementById('default-travel-sec').value) || 60;
+
+      let timetable = [];
+      routeStops.forEach((st, idx) => {
+        let arrTimeSec = currentTimeSec;
+        let depTimeSec = arrTimeSec + (idx === routeStops.length - 1 ? 0 : (t.stopTimeSec || 3));
+        timetable.push({ station: st, arr: formatTimeSec(arrTimeSec), dep: formatTimeSec(depTimeSec) });
+        currentTimeSec = depTimeSec + defaultTravel;
+      });
+
+      t.timetable = timetable;
+      renderTimetableTable(timetable);
+      alert('ダイヤを生成しました！');
     }
 
-    addNewTrain();
-    renderExpressList();
+    function formatTimeSec(sec) {
+      let hh = Math.floor(sec / 3600) % 24;
+      let mm = Math.floor((sec % 3600) / 60);
+      return `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;
+    }
+
+    function renderTimetableTable(timetable) {
+      let tbody = document.getElementById('timetable-body');
+      tbody.innerHTML = '';
+      if (!timetable || timetable.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" style="color:#888;">ダイヤ未作成</td></tr>';
+        return;
+      }
+      timetable.forEach(row => {
+        let tr = document.createElement('tr');
+        tr.innerHTML = `<td>${row.station.name}</td><td>${row.arr}</td><td>${row.dep}</td>`;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // 初期化実行
+    window.onload = function() {
+      addNewTrain();
+    };
   </script>
 </body>
 </html>
